@@ -1,12 +1,12 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - tf-stickman
+name: Build and deploy stickman
 
 on:
-  push:
-    branches:
-      - master
+  # push:
+  #   branches:
+  #     - master
   workflow_dispatch:
 
 jobs:
@@ -51,9 +51,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_76C6A3C5175143E0BD4FABE846B6F5F2 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_505A99B7C4FC48B096DEF11CEC2D3BB3 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_0A35725F22C84E9D972A482885E882AF }}
+          client-id: ${{ secrets.AZURE-CLIENT-ID }}
+          tenant-id: ${{ secrets.AZURE-TENANT-ID }}
+          subscription-id: ${{ secrets.AZURE-SUBSCRIPTION-ID }}
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
