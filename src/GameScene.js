@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 const GROUND_Y = 500;
-const GAME_W = 1024;
+const GAME_W = 3072;
 
 const UNIT_TYPES = [
   { name: 'Archer',   cost: 25,  hp: 25,  damage: 15, speed: 50, width: 16, height: 32, color: 0x33cc33 },
@@ -72,10 +72,10 @@ export class GameScene extends Phaser.Scene {
     const btnGap = 8;
     UNIT_TYPES.forEach((type, i) => {
       const x = btnStartX + i * (btnW + btnGap);
-      const btn = this.add.rectangle(x, 20, btnW, 36, 0x226622, 0.9).setOrigin(0, 0);
-      this.add.text(x + 8, 26, `${type.name} (${type.cost}g)`, {
+      const btn = this.add.rectangle(x, 20, btnW, 36, 0x226622, 0.9).setOrigin(0, 0).setScrollFactor(0);
+      const label = this.add.text(x + 8, 26, `${type.name} (${type.cost}g)`, {
         fontSize: '14px', color: '#ffffff',
-      });
+      }).setScrollFactor(0);
       btn.setInteractive({ useHandCursor: true });
       btn.on('pointerdown', () => this.spawnUnit(type));
     });
@@ -98,6 +98,14 @@ export class GameScene extends Phaser.Scene {
       loop: true,
       callback: () => this.spawnEnemy(),
     });
+
+    // ── Camera & physics bounds ─────────────────────────────
+    this.physics.world.setBounds(0, 0, GAME_W, 576);
+    this.cameras.main.setBounds(0, 0, GAME_W, 576);
+    this.cursors = this.input.keyboard.createCursorKeys();
+
+    // ── Pin HUD to camera ─────────────────────────────────
+    this.goldText.setScrollFactor(0);
 
     // ── Game-over flag ──────────────────────────────────────
     this.gameOver = false;
@@ -171,6 +179,14 @@ export class GameScene extends Phaser.Scene {
     if (this.gameOver) return;
 
     const dt = delta / 1000;
+
+    // ── Camera panning ────────────────────────────────────────
+    const camSpeed = 400;
+    if (this.cursors.left.isDown) {
+      this.cameras.main.scrollX -= camSpeed * dt;
+    } else if (this.cursors.right.isDown) {
+      this.cameras.main.scrollX += camSpeed * dt;
+    }
 
     // ── Warriors ──────────────────────────────────────────────
     this.warriors.getChildren().forEach((w) => {
@@ -266,15 +282,15 @@ export class GameScene extends Phaser.Scene {
     this.warriors.getChildren().forEach((w) => w.body && w.body.setVelocityX(0));
     this.enemies.getChildren().forEach((e) => e.body && e.body.setVelocityX(0));
 
-    this.add.text(GAME_W / 2, 200, message, {
+    this.add.text(512, 200, message, {
       fontSize: '48px',
       color: message === 'You Win!' ? '#00ff00' : '#ff0000',
       fontStyle: 'bold',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setScrollFactor(0);
 
-    this.add.text(GAME_W / 2, 260, 'Click to restart', {
+    this.add.text(512, 260, 'Click to restart', {
       fontSize: '20px', color: '#ffffff',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setScrollFactor(0);
 
     this.input.once('pointerdown', () => this.scene.restart());
   }
