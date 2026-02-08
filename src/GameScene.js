@@ -51,6 +51,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Gold ────────────────────────────────────────────────
     this.gold = 100;
+    this.enemyGold = 100;
     this.goldText = this.add.text(16, 16, '', { fontSize: '20px', color: '#FFD700' });
     this.updateGoldText();
 
@@ -60,6 +61,7 @@ export class GameScene extends Phaser.Scene {
       loop: true,
       callback: () => {
         this.gold += 5;
+        this.enemyGold += 5;
         this.updateGoldText();
       },
     });
@@ -130,7 +132,11 @@ export class GameScene extends Phaser.Scene {
   spawnEnemy() {
     if (this.gameOver) return;
 
-    const type = Phaser.Utils.Array.GetRandom(UNIT_TYPES);
+    const affordable = UNIT_TYPES.filter((t) => t.cost <= this.enemyGold);
+    if (affordable.length === 0) return;
+
+    const type = Phaser.Utils.Array.GetRandom(affordable);
+    this.enemyGold -= type.cost;
     const e = this.add.rectangle(GAME_W - 100, GROUND_Y - type.height / 2, type.width, type.height, 0xff4444);
     this.physics.add.existing(e);
     e.body.setCollideWorldBounds(true);
