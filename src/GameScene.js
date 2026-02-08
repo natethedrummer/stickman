@@ -3,14 +3,13 @@ import Phaser from 'phaser';
 const GROUND_Y = 500;
 const GAME_W = 1024;
 
-const WARRIOR_COST = 50;
-const WARRIOR_SPEED = 50;
-const WARRIOR_DAMAGE = 10; // per second
-const WARRIOR_HP = 50;
+const UNIT_TYPES = [
+  { name: 'Archer',   cost: 25,  hp: 25,  damage: 15, speed: 50, width: 16, height: 32, color: 0x33cc33 },
+  { name: 'Warrior',  cost: 50,  hp: 50,  damage: 10, speed: 50, width: 24, height: 40, color: 0x3399ff },
+  { name: 'Spearman', cost: 75,  hp: 65,  damage: 12, speed: 60, width: 20, height: 44, color: 0xff8800 },
+  { name: 'Giant',    cost: 150, hp: 150, damage: 20, speed: 30, width: 36, height: 52, color: 0x9933ff },
+];
 
-const ENEMY_SPEED = 50;
-const ENEMY_DAMAGE = 10;
-const ENEMY_HP = 50;
 const ENEMY_SPAWN_INTERVAL = 5000;
 
 const BASE_HP = 500;
@@ -65,13 +64,19 @@ export class GameScene extends Phaser.Scene {
       },
     });
 
-    // ── Spawn button ────────────────────────────────────────
-    const btn = this.add.rectangle(130, 20, 180, 36, 0x226622, 0.9).setOrigin(0, 0);
-    const btnText = this.add.text(142, 26, `Spawn Warrior (${WARRIOR_COST}g)`, {
-      fontSize: '15px', color: '#ffffff',
+    // ── Spawn buttons ─────────────────────────────────────────
+    const btnStartX = 130;
+    const btnW = 160;
+    const btnGap = 8;
+    UNIT_TYPES.forEach((type, i) => {
+      const x = btnStartX + i * (btnW + btnGap);
+      const btn = this.add.rectangle(x, 20, btnW, 36, 0x226622, 0.9).setOrigin(0, 0);
+      this.add.text(x + 8, 26, `${type.name} (${type.cost}g)`, {
+        fontSize: '14px', color: '#ffffff',
+      });
+      btn.setInteractive({ useHandCursor: true });
+      btn.on('pointerdown', () => this.spawnUnit(type));
     });
-    btn.setInteractive({ useHandCursor: true });
-    btn.on('pointerdown', () => this.spawnWarrior());
 
     // ── Groups ──────────────────────────────────────────────
     this.warriors = this.physics.add.group();
@@ -97,45 +102,51 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── Spawning ────────────────────────────────────────────────
-  spawnWarrior() {
+  spawnUnit(type) {
     if (this.gameOver) return;
-    if (this.gold < WARRIOR_COST) return;
-    this.gold -= WARRIOR_COST;
+    if (this.gold < type.cost) return;
+    this.gold -= type.cost;
     this.updateGoldText();
 
-    const w = this.add.rectangle(100, GROUND_Y - 20, 24, 40, 0x3399ff);
+    const w = this.add.rectangle(100, GROUND_Y - type.height / 2, type.width, type.height, type.color);
     this.physics.add.existing(w);
     w.body.setCollideWorldBounds(true);
     this.warriors.add(w);
 
-    w.getData = undefined; // use custom props
-    w.hp = WARRIOR_HP;
+    w.hp = type.hp;
+    w.maxHp = type.hp;
     w.attacking = false;
     w.attackTarget = null;
-    w.speed = WARRIOR_SPEED;
-    w.damage = WARRIOR_DAMAGE;
+    w.speed = type.speed;
+    w.damage = type.damage;
     w.faction = 'player';
+    w.unitCost = type.cost;
+    w.unitWidth = type.width;
 
     // HP bar
-    w.hpBar = this.add.rectangle(w.x, w.y - 28, 24, 4, 0x00ff00).setDepth(1);
+    w.hpBar = this.add.rectangle(w.x, w.y - type.height / 2 - 6, type.width, 4, 0x00ff00).setDepth(1);
   }
 
   spawnEnemy() {
     if (this.gameOver) return;
 
-    const e = this.add.rectangle(GAME_W - 100, GROUND_Y - 20, 24, 40, 0xff4444);
+    const type = Phaser.Utils.Array.GetRandom(UNIT_TYPES);
+    const e = this.add.rectangle(GAME_W - 100, GROUND_Y - type.height / 2, type.width, type.height, 0xff4444);
     this.physics.add.existing(e);
     e.body.setCollideWorldBounds(true);
     this.enemies.add(e);
 
-    e.hp = ENEMY_HP;
+    e.hp = type.hp;
+    e.maxHp = type.hp;
     e.attacking = false;
     e.attackTarget = null;
-    e.speed = ENEMY_SPEED;
-    e.damage = ENEMY_DAMAGE;
+    e.speed = type.speed;
+    e.damage = type.damage;
     e.faction = 'enemy';
+    e.unitCost = type.cost;
+    e.unitWidth = type.width;
 
-    e.hpBar = this.add.rectangle(e.x, e.y - 28, 24, 4, 0xff0000).setDepth(1);
+    e.hpBar = this.add.rectangle(e.x, e.y - type.height / 2 - 6, type.width, 4, 0xff0000).setDepth(1);
   }
 
   // ── Combat ──────────────────────────────────────────────────
@@ -185,8 +196,8 @@ export class GameScene extends Phaser.Scene {
 
       // Update HP bar
       if (w.active && w.hpBar) {
-        w.hpBar.setPosition(w.x, w.y - 28);
-        w.hpBar.width = 24 * (w.hp / WARRIOR_HP);
+        w.hpBar.setPosition(w.x, w.y - w.height / 2 - 6);
+        w.hpBar.width = w.unitWidth * (w.hp / w.maxHp);
       }
     });
 
@@ -216,8 +227,8 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (e.active && e.hpBar) {
-        e.hpBar.setPosition(e.x, e.y - 28);
-        e.hpBar.width = 24 * (e.hp / ENEMY_HP);
+        e.hpBar.setPosition(e.x, e.y - e.height / 2 - 6);
+        e.hpBar.width = e.unitWidth * (e.hp / e.maxHp);
       }
     });
   }
@@ -233,8 +244,8 @@ export class GameScene extends Phaser.Scene {
 
   killUnit(unit) {
     if (unit.hpBar) unit.hpBar.destroy();
-    // Award gold for killing enemies
-    if (unit.faction === 'enemy') this.gold += 10;
+    // Award gold for killing enemies (cost / 5)
+    if (unit.faction === 'enemy') this.gold += Math.floor(unit.unitCost / 5);
     this.updateGoldText();
     unit.destroy();
   }
