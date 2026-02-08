@@ -21,6 +21,10 @@ export class GameScene extends Phaser.Scene {
     super('GameScene');
   }
 
+  preload() {
+    this.load.audio('bgMusic', 'music/bg-music.mp3');
+  }
+
   create() {
     this.generateStickmanTextures();
 
@@ -110,6 +114,19 @@ export class GameScene extends Phaser.Scene {
 
     // ── Pin HUD to camera ─────────────────────────────────
     this.goldText.setScrollFactor(0);
+
+    // ── Background music ─────────────────────────────────────
+    this.music = this.sound.add('bgMusic', { loop: true, volume: 0.5 });
+    this.music.play();
+
+    // ── Mute toggle button (top-right, pinned to camera) ────
+    this.muteBtn = this.add.text(1024 - 40, 16, '♪', {
+      fontSize: '24px', color: '#ffffff',
+    }).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.muteBtn.on('pointerdown', () => {
+      this.sound.mute = !this.sound.mute;
+      this.muteBtn.setText(this.sound.mute ? '♪X' : '♪');
+    });
 
     // ── Game-over flag ──────────────────────────────────────
     this.gameOver = false;
@@ -495,6 +512,7 @@ export class GameScene extends Phaser.Scene {
 
   endGame(message) {
     this.gameOver = true;
+    if (this.music) this.music.stop();
     // Stop all units
     this.warriors.getChildren().forEach((w) => w.body && w.body.setVelocityX(0));
     this.enemies.getChildren().forEach((e) => e.body && e.body.setVelocityX(0));
