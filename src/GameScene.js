@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { SoundFX } from './SoundFX.js';
 
 const GROUND_Y = 500;
 const GAME_W = 3072;
@@ -127,6 +128,11 @@ export class GameScene extends Phaser.Scene {
       this.sound.mute = !this.sound.mute;
       this.muteBtn.setText(this.sound.mute ? '♪X' : '♪');
     });
+
+    // ── Sound effects ─────────────────────────────────────────
+    this.sfx = new SoundFX(() => this.sound.mute);
+    this.lastCombatHitTime = 0;
+    this.lastBaseDamageTime = 0;
 
     // ── Game-over flag ──────────────────────────────────────
     this.gameOver = false;
@@ -341,8 +347,9 @@ export class GameScene extends Phaser.Scene {
   // ── Spawning ────────────────────────────────────────────────
   spawnUnit(type) {
     if (this.gameOver) return;
-    if (this.gold < type.cost) return;
+    if (this.gold < type.cost) { this.sfx.errorBuzz(); return; }
     this.gold -= type.cost;
+    this.sfx.playerSpawn();
     this.updateGoldText();
 
     const w = this.add.sprite(100, GROUND_Y - type.height / 2, textureKey(type.name, 'player'));
@@ -375,6 +382,7 @@ export class GameScene extends Phaser.Scene {
 
     const type = Phaser.Utils.Array.GetRandom(affordable);
     this.enemyGold -= type.cost;
+    this.sfx.enemySpawn();
     const e = this.add.sprite(GAME_W - 100, GROUND_Y - type.height / 2, textureKey(type.name, 'enemy'));
     e.setFlipX(true);
     this.physics.add.existing(e);
@@ -406,6 +414,13 @@ export class GameScene extends Phaser.Scene {
     warrior.attackTarget = enemy;
     enemy.attacking = true;
     enemy.attackTarget = warrior;
+
+    // Throttled combat sound
+    const now = this.time.now;
+    if (now - this.lastCombatHitTime > 300) {
+      this.lastCombatHitTime = now;
+      this.sfx.combatHit();
+    }
   }
 
   // ── Update loop ─────────────────────────────────────────────
@@ -445,6 +460,7 @@ export class GameScene extends Phaser.Scene {
         w.body.setVelocityX(0);
         this.enemyBaseHP -= w.damage * dt;
         this.enemyHPText.setText(`HP: ${Math.ceil(Math.max(0, this.enemyBaseHP))}`);
+        if (time - this.lastBaseDamageTime > 300) { this.lastBaseDamageTime = time; this.sfx.baseDamage(); }
         if (this.enemyBaseHP <= 0) this.endGame('You Win!');
       } else {
         w.body.setVelocityX(w.speed);
@@ -477,6 +493,7 @@ export class GameScene extends Phaser.Scene {
         e.body.setVelocityX(0);
         this.playerBaseHP -= e.damage * dt;
         this.playerHPText.setText(`HP: ${Math.ceil(Math.max(0, this.playerBaseHP))}`);
+        if (time - this.lastBaseDamageTime > 300) { this.lastBaseDamageTime = time; this.sfx.baseDamage(); }
         if (this.playerBaseHP <= 0) this.endGame('Game Over');
       } else {
         e.body.setVelocityX(-e.speed);
@@ -500,8 +517,12 @@ export class GameScene extends Phaser.Scene {
 
   killUnit(unit) {
     if (unit.hpBar) unit.hpBar.destroy();
+    this.sfx.unitDeath();
     // Award gold for killing enemies (cost / 5)
-    if (unit.faction === 'enemy') this.gold += Math.floor(unit.unitCost / 5);
+    if (unit.faction === 'enemy') {
+      this.gold += Math.floor(unit.unitCost / 5);
+      this.sfx.coinChime();
+    }
     this.updateGoldText();
     unit.destroy();
   }
@@ -513,6 +534,8 @@ export class GameScene extends Phaser.Scene {
   endGame(message) {
     this.gameOver = true;
     if (this.music) this.music.stop();
+    if (message === 'You Win!') this.sfx.victory();
+    else this.sfx.defeat();
     // Stop all units
     this.warriors.getChildren().forEach((w) => w.body && w.body.setVelocityX(0));
     this.enemies.getChildren().forEach((e) => e.body && e.body.setVelocityX(0));
