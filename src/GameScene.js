@@ -28,9 +28,10 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.generateStickmanTextures();
+    this.drawBackground();
 
     // ── Ground ──────────────────────────────────────────────
-    const ground = this.add.rectangle(GAME_W / 2, GROUND_Y + 40, GAME_W, 80, 0x3d8b37);
+    const ground = this.add.rectangle(GAME_W / 2, GROUND_Y + 40, GAME_W, 80, 0x3d8b37).setDepth(5);
     this.physics.add.existing(ground, true); // static body
     this.ground = ground;
 
@@ -39,29 +40,29 @@ export class GameScene extends Phaser.Scene {
     this.enemyBaseHP = BASE_HP;
 
     // Player base (left)
-    this.playerBase = this.add.rectangle(60, GROUND_Y - 60, 80, 120, 0x4444cc);
+    this.playerBase = this.add.rectangle(60, GROUND_Y - 60, 80, 120, 0x4444cc).setDepth(10);
     this.physics.add.existing(this.playerBase, true);
     this.playerBaseLabel = this.add.text(20, GROUND_Y - 140, 'Your Base', {
       fontSize: '13px', color: '#ffffff',
-    });
+    }).setDepth(10);
     this.playerHPText = this.add.text(20, GROUND_Y - 125, `HP: ${this.playerBaseHP}`, {
       fontSize: '12px', color: '#ffffff',
-    });
+    }).setDepth(10);
 
     // Enemy base (right)
-    this.enemyBase = this.add.rectangle(GAME_W - 60, GROUND_Y - 60, 80, 120, 0xcc4444);
+    this.enemyBase = this.add.rectangle(GAME_W - 60, GROUND_Y - 60, 80, 120, 0xcc4444).setDepth(10);
     this.physics.add.existing(this.enemyBase, true);
     this.enemyBaseLabel = this.add.text(GAME_W - 110, GROUND_Y - 140, 'Enemy Base', {
       fontSize: '13px', color: '#ffffff',
-    });
+    }).setDepth(10);
     this.enemyHPText = this.add.text(GAME_W - 110, GROUND_Y - 125, `HP: ${this.enemyBaseHP}`, {
       fontSize: '12px', color: '#ffffff',
-    });
+    }).setDepth(10);
 
     // ── Gold ────────────────────────────────────────────────
     this.gold = 100;
     this.enemyGold = 100;
-    this.goldText = this.add.text(16, 16, '', { fontSize: '20px', color: '#FFD700' });
+    this.goldText = this.add.text(16, 16, '', { fontSize: '20px', color: '#FFD700' }).setDepth(20);
     this.updateGoldText();
 
     // passive gold income: +10 per second
@@ -81,10 +82,10 @@ export class GameScene extends Phaser.Scene {
     const btnGap = 8;
     UNIT_TYPES.forEach((type, i) => {
       const x = btnStartX + i * (btnW + btnGap);
-      const btn = this.add.rectangle(x, 20, btnW, 36, 0x226622, 0.9).setOrigin(0, 0).setScrollFactor(0);
+      const btn = this.add.rectangle(x, 20, btnW, 36, 0x226622, 0.9).setOrigin(0, 0).setScrollFactor(0).setDepth(20);
       const label = this.add.text(x + 8, 26, `${type.name} (${type.cost}g)`, {
         fontSize: '14px', color: '#ffffff',
-      }).setScrollFactor(0);
+      }).setScrollFactor(0).setDepth(20);
       btn.setInteractive({ useHandCursor: true });
       btn.on('pointerdown', () => this.spawnUnit(type));
     });
@@ -123,7 +124,7 @@ export class GameScene extends Phaser.Scene {
     // ── Mute toggle button (top-right, pinned to camera) ────
     this.muteBtn = this.add.text(1024 - 40, 16, '♪', {
       fontSize: '24px', color: '#ffffff',
-    }).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    }).setScrollFactor(0).setInteractive({ useHandCursor: true }).setDepth(20);
     this.muteBtn.on('pointerdown', () => {
       this.sound.mute = !this.sound.mute;
       this.muteBtn.setText(this.sound.mute ? '♪X' : '♪');
@@ -162,6 +163,133 @@ export class GameScene extends Phaser.Scene {
         g.destroy();
       });
     });
+  }
+
+  // ── Parallax background ───────────────────────────────────
+  drawBackground() {
+    const viewW = 1024;
+    const viewH = 576;
+
+    // Layer 1 — Sky gradient (scrollFactor 0, fixed)
+    const skyG = this.add.graphics();
+    const bands = 32;
+    const bandH = GROUND_Y / bands;
+    for (let i = 0; i < bands; i++) {
+      const t = i / (bands - 1);
+      // Lerp from light blue (top) to pale white-blue (horizon)
+      const r = Math.round(135 + (230 - 135) * t);
+      const g = Math.round(206 + (240 - 206) * t);
+      const b = Math.round(235 + (255 - 235) * t);
+      const color = (r << 16) | (g << 8) | b;
+      skyG.fillStyle(color, 1);
+      skyG.fillRect(0, i * bandH, viewW, bandH + 1);
+    }
+    skyG.generateTexture('bg_sky', viewW, GROUND_Y);
+    skyG.destroy();
+    this.add.image(viewW / 2, GROUND_Y / 2, 'bg_sky').setScrollFactor(0).setDepth(0);
+
+    // Layer 2 — Clouds (scrollFactor 0.1)
+    const cloudW = Math.ceil(viewW + (GAME_W - viewW) * 0.1);
+    const cloudG = this.add.graphics();
+    const clouds = [
+      { x: 120, y: 60, s: 1.0 },
+      { x: 350, y: 90, s: 0.7 },
+      { x: 550, y: 45, s: 1.2 },
+      { x: 780, y: 75, s: 0.8 },
+      { x: 950, y: 55, s: 1.1 },
+      { x: 200, y: 110, s: 0.6 },
+    ];
+    clouds.forEach((c) => {
+      cloudG.fillStyle(0xffffff, 0.6);
+      cloudG.fillCircle(c.x, c.y, 24 * c.s);
+      cloudG.fillCircle(c.x + 20 * c.s, c.y - 5, 20 * c.s);
+      cloudG.fillCircle(c.x - 18 * c.s, c.y + 2, 18 * c.s);
+      cloudG.fillCircle(c.x + 10 * c.s, c.y + 8, 16 * c.s);
+      cloudG.fillStyle(0xeeeeee, 0.4);
+      cloudG.fillCircle(c.x + 30 * c.s, c.y + 4, 14 * c.s);
+      cloudG.fillCircle(c.x - 28 * c.s, c.y + 6, 12 * c.s);
+    });
+    cloudG.generateTexture('bg_clouds', cloudW, 150);
+    cloudG.destroy();
+    this.add.image(cloudW / 2, 75, 'bg_clouds').setScrollFactor(0.1).setDepth(1);
+
+    // Layer 3 — Far mountains (scrollFactor 0.2, blue-grey)
+    const farMtnW = Math.ceil(viewW + (GAME_W - viewW) * 0.2);
+    const farG = this.add.graphics();
+    farG.fillStyle(0x7090aa, 1);
+    const farPeaks = [
+      [0, GROUND_Y, 100, GROUND_Y - 160, 250, GROUND_Y],
+      [200, GROUND_Y, 350, GROUND_Y - 200, 520, GROUND_Y],
+      [450, GROUND_Y, 580, GROUND_Y - 140, 700, GROUND_Y],
+      [640, GROUND_Y, 800, GROUND_Y - 180, 950, GROUND_Y],
+      [880, GROUND_Y, 1020, GROUND_Y - 150, 1150, GROUND_Y],
+      [1080, GROUND_Y, 1200, GROUND_Y - 170, 1350, GROUND_Y],
+      [1280, GROUND_Y, 1380, GROUND_Y - 130, 1440, GROUND_Y],
+    ];
+    farPeaks.forEach(([x1, y1, x2, y2, x3, y3]) => {
+      farG.fillTriangle(x1, y1, x2, y2, x3, y3);
+    });
+    // Snow caps on taller peaks
+    farG.fillStyle(0xddeeff, 0.7);
+    farPeaks.forEach(([x1, y1, x2, y2, x3, y3]) => {
+      const peakH = y1 - y2;
+      if (peakH > 150) {
+        const capH = 25;
+        const capW = capH * ((x3 - x1) / (2 * peakH));
+        farG.fillTriangle(x2 - capW, y2 + capH, x2, y2, x2 + capW, y2 + capH);
+      }
+    });
+    farG.generateTexture('bg_far_mtn', farMtnW, GROUND_Y);
+    farG.destroy();
+    this.add.image(farMtnW / 2, GROUND_Y / 2, 'bg_far_mtn').setScrollFactor(0.2).setDepth(2);
+
+    // Layer 4 — Near mountains (scrollFactor 0.4, darker)
+    const nearMtnW = Math.ceil(viewW + (GAME_W - viewW) * 0.4);
+    const nearG = this.add.graphics();
+    nearG.fillStyle(0x506848, 1);
+    const nearPeaks = [
+      [0, GROUND_Y, 80, GROUND_Y - 100, 200, GROUND_Y],
+      [150, GROUND_Y, 300, GROUND_Y - 130, 430, GROUND_Y],
+      [380, GROUND_Y, 500, GROUND_Y - 90, 600, GROUND_Y],
+      [540, GROUND_Y, 680, GROUND_Y - 120, 820, GROUND_Y],
+      [760, GROUND_Y, 900, GROUND_Y - 110, 1020, GROUND_Y],
+      [960, GROUND_Y, 1100, GROUND_Y - 140, 1250, GROUND_Y],
+      [1180, GROUND_Y, 1320, GROUND_Y - 95, 1440, GROUND_Y],
+      [1380, GROUND_Y, 1500, GROUND_Y - 115, 1620, GROUND_Y],
+      [1560, GROUND_Y, 1680, GROUND_Y - 85, 1850, GROUND_Y],
+    ];
+    nearPeaks.forEach(([x1, y1, x2, y2, x3, y3]) => {
+      nearG.fillTriangle(x1, y1, x2, y2, x3, y3);
+    });
+    nearG.generateTexture('bg_near_mtn', nearMtnW, GROUND_Y);
+    nearG.destroy();
+    this.add.image(nearMtnW / 2, GROUND_Y / 2, 'bg_near_mtn').setScrollFactor(0.4).setDepth(3);
+
+    // Layer 5 — Trees (scrollFactor 0.7)
+    const treeW = Math.ceil(viewW + (GAME_W - viewW) * 0.7);
+    const treeG = this.add.graphics();
+    const treePositions = [];
+    for (let tx = 30; tx < treeW; tx += 40 + Math.random() * 60) {
+      treePositions.push(tx);
+    }
+    treePositions.forEach((tx) => {
+      const treeH = 30 + Math.random() * 30;
+      const trunkH = 10 + Math.random() * 8;
+      const baseY = GROUND_Y;
+      // Trunk
+      treeG.fillStyle(0x5a3a1a, 1);
+      treeG.fillRect(tx - 2, baseY - trunkH, 4, trunkH);
+      // Canopy (triangle)
+      treeG.fillStyle(0x2d5a1e, 1);
+      treeG.fillTriangle(
+        tx - 10 - Math.random() * 5, baseY - trunkH,
+        tx, baseY - trunkH - treeH,
+        tx + 10 + Math.random() * 5, baseY - trunkH,
+      );
+    });
+    treeG.generateTexture('bg_trees', treeW, GROUND_Y);
+    treeG.destroy();
+    this.add.image(treeW / 2, GROUND_Y / 2, 'bg_trees').setScrollFactor(0.7).setDepth(4);
   }
 
   drawArcher(g, w, h, color) {
@@ -352,7 +480,7 @@ export class GameScene extends Phaser.Scene {
     this.sfx.playerSpawn();
     this.updateGoldText();
 
-    const w = this.add.sprite(100, GROUND_Y - type.height / 2, textureKey(type.name, 'player'));
+    const w = this.add.sprite(100, GROUND_Y - type.height / 2, textureKey(type.name, 'player')).setDepth(10);
     this.physics.add.existing(w);
     w.body.setSize(type.width, type.height);
     w.body.setOffset(8, 4);
@@ -371,7 +499,7 @@ export class GameScene extends Phaser.Scene {
     w.unitHeight = type.height;
 
     // HP bar
-    w.hpBar = this.add.rectangle(w.x, w.y - type.height / 2 - 6, type.width, 4, 0x00ff00).setDepth(1);
+    w.hpBar = this.add.rectangle(w.x, w.y - type.height / 2 - 6, type.width, 4, 0x00ff00).setDepth(11);
   }
 
   spawnEnemy() {
@@ -383,7 +511,7 @@ export class GameScene extends Phaser.Scene {
     const type = Phaser.Utils.Array.GetRandom(affordable);
     this.enemyGold -= type.cost;
     this.sfx.enemySpawn();
-    const e = this.add.sprite(GAME_W - 100, GROUND_Y - type.height / 2, textureKey(type.name, 'enemy'));
+    const e = this.add.sprite(GAME_W - 100, GROUND_Y - type.height / 2, textureKey(type.name, 'enemy')).setDepth(10);
     e.setFlipX(true);
     this.physics.add.existing(e);
     e.body.setSize(type.width, type.height);
@@ -402,7 +530,7 @@ export class GameScene extends Phaser.Scene {
     e.unitWidth = type.width;
     e.unitHeight = type.height;
 
-    e.hpBar = this.add.rectangle(e.x, e.y - type.height / 2 - 6, type.width, 4, 0xff0000).setDepth(1);
+    e.hpBar = this.add.rectangle(e.x, e.y - type.height / 2 - 6, type.width, 4, 0xff0000).setDepth(11);
   }
 
   // ── Combat ──────────────────────────────────────────────────
@@ -544,11 +672,11 @@ export class GameScene extends Phaser.Scene {
       fontSize: '48px',
       color: message === 'You Win!' ? '#00ff00' : '#ff0000',
       fontStyle: 'bold',
-    }).setOrigin(0.5).setScrollFactor(0);
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
 
     this.add.text(512, 260, 'Click to restart', {
       fontSize: '20px', color: '#ffffff',
-    }).setOrigin(0.5).setScrollFactor(0);
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
 
     this.input.once('pointerdown', () => this.scene.restart());
   }
