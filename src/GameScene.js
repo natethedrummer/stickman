@@ -166,6 +166,28 @@ export class GameScene extends Phaser.Scene {
     rightBtn.on('pointerup', () => { this.camRight = false; });
     rightBtn.on('pointerout', () => { this.camRight = false; });
 
+    // ── Minimap ──────────────────────────────────────────────
+    const mmW = 180;
+    const mmH = 24;
+    const mmX = 1024 - mmW - 12;
+    const mmY = 576 - mmH - 12;
+    this.minimapBg = this.add.rectangle(mmX + mmW / 2, mmY + mmH / 2, mmW, mmH, 0x000000, 0.5)
+      .setScrollFactor(0).setDepth(20);
+    // Viewport indicator
+    const vpW = (1024 / GAME_W) * mmW;
+    this.minimapVP = this.add.rectangle(mmX + vpW / 2, mmY + mmH / 2, vpW, mmH - 2, 0xffffff, 0.3)
+      .setScrollFactor(0).setDepth(21);
+    // Base markers
+    const basePlayerX = mmX + (60 / GAME_W) * mmW;
+    const baseEnemyX = mmX + ((GAME_W - 60) / GAME_W) * mmW;
+    this.add.rectangle(basePlayerX, mmY + mmH / 2, 4, mmH - 4, 0x4444cc)
+      .setScrollFactor(0).setDepth(22);
+    this.add.rectangle(baseEnemyX, mmY + mmH / 2, 4, mmH - 4, 0xcc4444)
+      .setScrollFactor(0).setDepth(22);
+    // Graphics layer for unit dots
+    this.minimapGfx = this.add.graphics().setScrollFactor(0).setDepth(22);
+    this.minimapPos = { x: mmX, y: mmY, w: mmW, h: mmH };
+
     // ── Game-over flag ──────────────────────────────────────
     this.gameOver = false;
   }
@@ -670,6 +692,26 @@ export class GameScene extends Phaser.Scene {
         e.hpBar.setPosition(e.x, e.y - e.unitHeight / 2 - 6);
         e.hpBar.width = e.unitWidth * (e.hp / e.maxHp);
       }
+    });
+
+    // ── Update minimap ─────────────────────────────────────────
+    const mm = this.minimapPos;
+    const vpW = (1024 / GAME_W) * mm.w;
+    const vpX = mm.x + (this.cameras.main.scrollX / GAME_W) * mm.w + vpW / 2;
+    this.minimapVP.setPosition(vpX, mm.y + mm.h / 2);
+
+    this.minimapGfx.clear();
+    this.warriors.getChildren().forEach((w) => {
+      if (!w.active) return;
+      const dotX = mm.x + (w.x / GAME_W) * mm.w;
+      this.minimapGfx.fillStyle(0x33cc33, 1);
+      this.minimapGfx.fillCircle(dotX, mm.y + mm.h / 2, 2);
+    });
+    this.enemies.getChildren().forEach((e) => {
+      if (!e.active) return;
+      const dotX = mm.x + (e.x / GAME_W) * mm.w;
+      this.minimapGfx.fillStyle(0xff4444, 1);
+      this.minimapGfx.fillCircle(dotX, mm.y + mm.h / 2, 2);
     });
   }
 
