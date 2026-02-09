@@ -135,6 +135,33 @@ export class GameScene extends Phaser.Scene {
     this.lastCombatHitTime = 0;
     this.lastBaseDamageTime = 0;
 
+    // ── Mobile camera buttons ─────────────────────────────────
+    this.camLeft = false;
+    this.camRight = false;
+
+    const arrowBtnSize = 56;
+    const arrowY = 576 - arrowBtnSize / 2 - 12;
+    const arrowLeftX = arrowBtnSize / 2 + 12;
+    const arrowRightX = arrowLeftX + arrowBtnSize + 10;
+
+    const leftBtn = this.add.rectangle(arrowLeftX, arrowY, arrowBtnSize, arrowBtnSize, 0x000000, 0.4)
+      .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+    this.add.text(arrowLeftX, arrowY, '◀', { fontSize: '28px', color: '#ffffff' })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(21);
+
+    const rightBtn = this.add.rectangle(arrowRightX, arrowY, arrowBtnSize, arrowBtnSize, 0x000000, 0.4)
+      .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+    this.add.text(arrowRightX, arrowY, '▶', { fontSize: '28px', color: '#ffffff' })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(21);
+
+    leftBtn.on('pointerdown', () => { this.camLeft = true; });
+    leftBtn.on('pointerup', () => { this.camLeft = false; });
+    leftBtn.on('pointerout', () => { this.camLeft = false; });
+
+    rightBtn.on('pointerdown', () => { this.camRight = true; });
+    rightBtn.on('pointerup', () => { this.camRight = false; });
+    rightBtn.on('pointerout', () => { this.camRight = false; });
+
     // ── Game-over flag ──────────────────────────────────────
     this.gameOver = false;
   }
@@ -557,11 +584,11 @@ export class GameScene extends Phaser.Scene {
 
     const dt = delta / 1000;
 
-    // ── Camera panning ────────────────────────────────────────
+    // ── Camera panning (keyboard + on-screen buttons) ────────
     const camSpeed = 400;
-    if (this.cursors.left.isDown) {
+    if (this.cursors.left.isDown || this.camLeft) {
       this.cameras.main.scrollX -= camSpeed * dt;
-    } else if (this.cursors.right.isDown) {
+    } else if (this.cursors.right.isDown || this.camRight) {
       this.cameras.main.scrollX += camSpeed * dt;
     }
 
