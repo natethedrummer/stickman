@@ -41,6 +41,8 @@ export class GameScene extends Phaser.Scene {
 
     // Player base (left)
     this.playerBase = this.add.rectangle(60, GROUND_Y - 60, 80, 120, 0x4444cc).setDepth(10);
+    this.playerBase.faction = 'player';
+    this.playerBase.unitHeight = 120;
     this.physics.add.existing(this.playerBase, true);
     this.playerBaseLabel = this.add.text(20, GROUND_Y - 140, 'Your Base', {
       fontSize: '13px', color: '#ffffff',
@@ -51,6 +53,8 @@ export class GameScene extends Phaser.Scene {
 
     // Enemy base (right)
     this.enemyBase = this.add.rectangle(GAME_W - 60, GROUND_Y - 60, 80, 120, 0xcc4444).setDepth(10);
+    this.enemyBase.faction = 'enemy';
+    this.enemyBase.unitHeight = 120;
     this.physics.add.existing(this.enemyBase, true);
     this.enemyBaseLabel = this.add.text(GAME_W - 110, GROUND_Y - 140, 'Enemy Base', {
       fontSize: '13px', color: '#ffffff',
@@ -604,7 +608,9 @@ export class GameScene extends Phaser.Scene {
 
       if (w.attacking && w.attackTarget) {
         // Attack another unit
-        w.attackTarget.hp -= w.damage * dt;
+        const dmg = w.damage * dt;
+        w.attackTarget.hp -= dmg;
+        this.accumulateDamage(w.attackTarget, dmg, time);
         if (w.attackTarget.hp <= 0) {
           this.killUnit(w.attackTarget);
           w.attacking = false;
@@ -613,7 +619,9 @@ export class GameScene extends Phaser.Scene {
       } else if (this.isAtEnemyBase(w)) {
         // Attack enemy base
         w.body.setVelocityX(0);
-        this.enemyBaseHP -= w.damage * dt;
+        const dmg = w.damage * dt;
+        this.enemyBaseHP -= dmg;
+        this.accumulateDamage(this.enemyBase, dmg, time);
         this.enemyHPText.setText(`HP: ${Math.ceil(Math.max(0, this.enemyBaseHP))}`);
         if (time - this.lastBaseDamageTime > 300) { this.lastBaseDamageTime = time; this.sfx.baseDamage(); }
         if (this.enemyBaseHP <= 0) this.endGame('You Win!');
@@ -638,7 +646,9 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (e.attacking && e.attackTarget) {
-        e.attackTarget.hp -= e.damage * dt;
+        const dmg = e.damage * dt;
+        e.attackTarget.hp -= dmg;
+        this.accumulateDamage(e.attackTarget, dmg, time);
         if (e.attackTarget.hp <= 0) {
           this.killUnit(e.attackTarget);
           e.attacking = false;
@@ -646,7 +656,9 @@ export class GameScene extends Phaser.Scene {
         }
       } else if (this.isAtPlayerBase(e)) {
         e.body.setVelocityX(0);
-        this.playerBaseHP -= e.damage * dt;
+        const dmg = e.damage * dt;
+        this.playerBaseHP -= dmg;
+        this.accumulateDamage(this.playerBase, dmg, time);
         this.playerHPText.setText(`HP: ${Math.ceil(Math.max(0, this.playerBaseHP))}`);
         if (time - this.lastBaseDamageTime > 300) { this.lastBaseDamageTime = time; this.sfx.baseDamage(); }
         if (this.playerBaseHP <= 0) this.endGame('Game Over');
@@ -662,6 +674,33 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ── Helpers ─────────────────────────────────────────────────
+  showDamageNumber(x, y, amount, color = '#ffffff') {
+    const txt = this.add.text(x, y - 10, Math.ceil(amount).toString(), {
+      fontSize: '14px', color, fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 2,
+    }).setDepth(15).setOrigin(0.5);
+    this.tweens.add({
+      targets: txt,
+      y: y - 40,
+      alpha: 0,
+      duration: 800,
+      ease: 'Power1',
+      onComplete: () => txt.destroy(),
+    });
+  }
+
+  accumulateDamage(unit, amount, time) {
+    if (!unit.dmgAccum) unit.dmgAccum = 0;
+    if (!unit.lastDmgTime) unit.lastDmgTime = 0;
+    unit.dmgAccum += amount;
+    if (time - unit.lastDmgTime >= 500) {
+      const color = unit.faction === 'enemy' ? '#ff4444' : '#44aaff';
+      this.showDamageNumber(unit.x, unit.y - unit.unitHeight / 2, unit.dmgAccum, color);
+      unit.dmgAccum = 0;
+      unit.lastDmgTime = time;
+    }
+  }
+
   isAtEnemyBase(unit) {
     return unit.x >= this.enemyBase.x - 60;
   }
