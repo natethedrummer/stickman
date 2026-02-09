@@ -12,7 +12,8 @@ const UNIT_TYPES = [
   { name: 'Giant',    cost: 150, hp: 150, damage: 20, speed: 30, width: 36, height: 52, color: 0x9933ff },
 ];
 
-const textureKey = (typeName, faction) => `${typeName.toLowerCase()}_${faction}`;
+const textureKey = (typeName, faction, pose = 'idle') => `${typeName.toLowerCase()}_${faction}_${pose}`;
+const animKey = (typeName, faction, state) => `${typeName.toLowerCase()}_${faction}_${state}`;
 
 const BASE_HP = 500;
 
@@ -209,6 +210,8 @@ export class GameScene extends Phaser.Scene {
       Giant: this.drawGiant,
     };
 
+    const poses = ['idle', 'walk_0', 'walk_1', 'attack_0', 'attack_1'];
+
     UNIT_TYPES.forEach((type) => {
       const texW = type.width + 16;
       const texH = type.height + 4;
@@ -217,11 +220,44 @@ export class GameScene extends Phaser.Scene {
         { faction: 'player', color: type.color },
         { faction: 'enemy', color: 0xff4444 },
       ].forEach(({ faction, color }) => {
-        const g = this.add.graphics();
         const drawFn = drawFns[type.name];
-        if (drawFn) drawFn(g, texW, texH, color);
-        g.generateTexture(textureKey(type.name, faction), texW, texH);
-        g.destroy();
+        if (!drawFn) return;
+        poses.forEach((pose) => {
+          const g = this.add.graphics();
+          drawFn(g, texW, texH, color, pose);
+          g.generateTexture(textureKey(type.name, faction, pose), texW, texH);
+          g.destroy();
+        });
+      });
+    });
+
+    this.createAnimations();
+  }
+
+  createAnimations() {
+    UNIT_TYPES.forEach((type) => {
+      ['player', 'enemy'].forEach((faction) => {
+        // Walk animation — 2 frames at 4 fps
+        this.anims.create({
+          key: animKey(type.name, faction, 'walk'),
+          frames: [
+            { key: textureKey(type.name, faction, 'walk_0') },
+            { key: textureKey(type.name, faction, 'walk_1') },
+          ],
+          frameRate: 4,
+          repeat: -1,
+        });
+
+        // Attack animation — 2 frames at 3 fps
+        this.anims.create({
+          key: animKey(type.name, faction, 'attack'),
+          frames: [
+            { key: textureKey(type.name, faction, 'attack_0') },
+            { key: textureKey(type.name, faction, 'attack_1') },
+          ],
+          frameRate: 3,
+          repeat: -1,
+        });
       });
     });
   }
@@ -353,7 +389,7 @@ export class GameScene extends Phaser.Scene {
     this.add.image(treeW / 2, GROUND_Y / 2, 'bg_trees').setScrollFactor(0.7).setDepth(4);
   }
 
-  drawArcher(g, w, h, color) {
+  drawArcher(g, w, h, color, pose = 'idle') {
     const cx = w / 2;
     const headR = 4;
     const headY = 4 + headR;
@@ -370,37 +406,95 @@ export class GameScene extends Phaser.Scene {
     g.moveTo(cx, neckY);
     g.lineTo(cx, bodyEnd);
     g.strokePath();
-    // Legs (V-shape)
+    // Legs
     g.beginPath();
-    g.moveTo(cx - 5, footY);
-    g.lineTo(cx, bodyEnd);
-    g.lineTo(cx + 5, footY);
+    if (pose === 'walk_0') {
+      g.moveTo(cx - 7, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 3, footY);
+    } else if (pose === 'walk_1') {
+      g.moveTo(cx - 3, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 7, footY);
+    } else {
+      g.moveTo(cx - 5, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 5, footY);
+    }
     g.strokePath();
     // Arms
     const armY = neckY + 6;
-    g.beginPath();
-    g.moveTo(cx - 6, armY + 4);
-    g.lineTo(cx, armY);
-    g.lineTo(cx + 6, armY - 2);
-    g.strokePath();
-    // Bow (arc on right side)
-    g.lineStyle(2, 0x8B4513, 1);
-    g.beginPath();
-    g.arc(cx + 8, armY, 8, -Math.PI * 0.6, Math.PI * 0.6, false);
-    g.strokePath();
-    // Bowstring
-    g.lineStyle(1, 0xcccccc, 1);
-    g.beginPath();
-    const bowTopX = cx + 8 + 8 * Math.cos(-Math.PI * 0.6);
-    const bowTopY = armY + 8 * Math.sin(-Math.PI * 0.6);
-    const bowBotX = cx + 8 + 8 * Math.cos(Math.PI * 0.6);
-    const bowBotY = armY + 8 * Math.sin(Math.PI * 0.6);
-    g.moveTo(bowTopX, bowTopY);
-    g.lineTo(bowBotX, bowBotY);
-    g.strokePath();
+    if (pose === 'attack_0') {
+      // Bowstring pulled back
+      g.beginPath();
+      g.moveTo(cx - 2, armY + 2);
+      g.lineTo(cx, armY);
+      g.lineTo(cx + 6, armY - 2);
+      g.strokePath();
+      g.lineStyle(2, 0x8B4513, 1);
+      g.beginPath();
+      g.arc(cx + 8, armY, 8, -Math.PI * 0.6, Math.PI * 0.6, false);
+      g.strokePath();
+      g.lineStyle(1, 0xcccccc, 1);
+      g.beginPath();
+      const bowTopX = cx + 8 + 8 * Math.cos(-Math.PI * 0.6);
+      const bowTopY = armY + 8 * Math.sin(-Math.PI * 0.6);
+      const bowBotX = cx + 8 + 8 * Math.cos(Math.PI * 0.6);
+      const bowBotY = armY + 8 * Math.sin(Math.PI * 0.6);
+      g.moveTo(bowTopX, bowTopY);
+      g.lineTo(cx + 2, armY); // pulled back
+      g.lineTo(bowBotX, bowBotY);
+      g.strokePath();
+    } else if (pose === 'attack_1') {
+      // Bowstring released
+      g.beginPath();
+      g.moveTo(cx - 6, armY + 4);
+      g.lineTo(cx, armY);
+      g.lineTo(cx + 6, armY - 2);
+      g.strokePath();
+      g.lineStyle(2, 0x8B4513, 1);
+      g.beginPath();
+      g.arc(cx + 8, armY, 8, -Math.PI * 0.6, Math.PI * 0.6, false);
+      g.strokePath();
+      g.lineStyle(1, 0xcccccc, 1);
+      g.beginPath();
+      const bowTopX = cx + 8 + 8 * Math.cos(-Math.PI * 0.6);
+      const bowTopY = armY + 8 * Math.sin(-Math.PI * 0.6);
+      const bowBotX = cx + 8 + 8 * Math.cos(Math.PI * 0.6);
+      const bowBotY = armY + 8 * Math.sin(Math.PI * 0.6);
+      g.moveTo(bowTopX, bowTopY);
+      g.lineTo(bowBotX, bowBotY);
+      g.strokePath();
+      // Arrow flying
+      g.lineStyle(1, 0x8B4513, 1);
+      g.beginPath();
+      g.moveTo(cx + 14, armY - 1);
+      g.lineTo(cx + 20, armY - 1);
+      g.strokePath();
+    } else {
+      // Idle / walk — standard bow pose
+      g.beginPath();
+      g.moveTo(cx - 6, armY + 4);
+      g.lineTo(cx, armY);
+      g.lineTo(cx + 6, armY - 2);
+      g.strokePath();
+      g.lineStyle(2, 0x8B4513, 1);
+      g.beginPath();
+      g.arc(cx + 8, armY, 8, -Math.PI * 0.6, Math.PI * 0.6, false);
+      g.strokePath();
+      g.lineStyle(1, 0xcccccc, 1);
+      g.beginPath();
+      const bowTopX = cx + 8 + 8 * Math.cos(-Math.PI * 0.6);
+      const bowTopY = armY + 8 * Math.sin(-Math.PI * 0.6);
+      const bowBotX = cx + 8 + 8 * Math.cos(Math.PI * 0.6);
+      const bowBotY = armY + 8 * Math.sin(Math.PI * 0.6);
+      g.moveTo(bowTopX, bowTopY);
+      g.lineTo(bowBotX, bowBotY);
+      g.strokePath();
+    }
   }
 
-  drawWarrior(g, w, h, color) {
+  drawWarrior(g, w, h, color, pose = 'idle') {
     const cx = w / 2;
     const headR = 5;
     const headY = 4 + headR;
@@ -419,34 +513,70 @@ export class GameScene extends Phaser.Scene {
     g.strokePath();
     // Legs
     g.beginPath();
-    g.moveTo(cx - 6, footY);
-    g.lineTo(cx, bodyEnd);
-    g.lineTo(cx + 6, footY);
+    if (pose === 'walk_0') {
+      g.moveTo(cx - 9, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 3, footY);
+    } else if (pose === 'walk_1') {
+      g.moveTo(cx - 3, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 9, footY);
+    } else {
+      g.moveTo(cx - 6, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 6, footY);
+    }
     g.strokePath();
-    // Arms
+    // Arms & weapon
     const armY = neckY + 6;
-    // Left arm holding shield
+    // Left arm holding shield (always)
     g.beginPath();
     g.moveTo(cx - 8, armY + 2);
     g.lineTo(cx, armY);
     g.strokePath();
-    // Right arm raised with sword
-    g.beginPath();
-    g.moveTo(cx, armY);
-    g.lineTo(cx + 7, armY - 6);
-    g.strokePath();
-    // Sword (from right hand upward)
-    g.lineStyle(2, 0xcccccc, 1);
-    g.beginPath();
-    g.moveTo(cx + 7, armY - 6);
-    g.lineTo(cx + 9, armY - 16);
-    g.strokePath();
-    // Shield (small rect on left)
     g.fillStyle(0x666688, 1);
     g.fillRect(cx - 12, armY - 2, 5, 8);
+
+    if (pose === 'attack_0') {
+      // Sword raised high
+      g.lineStyle(2, color, 1);
+      g.beginPath();
+      g.moveTo(cx, armY);
+      g.lineTo(cx + 5, armY - 10);
+      g.strokePath();
+      g.lineStyle(2, 0xcccccc, 1);
+      g.beginPath();
+      g.moveTo(cx + 5, armY - 10);
+      g.lineTo(cx + 4, armY - 22);
+      g.strokePath();
+    } else if (pose === 'attack_1') {
+      // Sword swung down
+      g.lineStyle(2, color, 1);
+      g.beginPath();
+      g.moveTo(cx, armY);
+      g.lineTo(cx + 10, armY + 4);
+      g.strokePath();
+      g.lineStyle(2, 0xcccccc, 1);
+      g.beginPath();
+      g.moveTo(cx + 10, armY + 4);
+      g.lineTo(cx + 16, armY + 10);
+      g.strokePath();
+    } else {
+      // Idle / walk — sword held ready
+      g.lineStyle(2, color, 1);
+      g.beginPath();
+      g.moveTo(cx, armY);
+      g.lineTo(cx + 7, armY - 6);
+      g.strokePath();
+      g.lineStyle(2, 0xcccccc, 1);
+      g.beginPath();
+      g.moveTo(cx + 7, armY - 6);
+      g.lineTo(cx + 9, armY - 16);
+      g.strokePath();
+    }
   }
 
-  drawSpearman(g, w, h, color) {
+  drawSpearman(g, w, h, color, pose = 'idle') {
     const cx = w / 2;
     const headR = 5;
     const headY = 4 + headR;
@@ -465,33 +595,70 @@ export class GameScene extends Phaser.Scene {
     g.strokePath();
     // Legs
     g.beginPath();
-    g.moveTo(cx - 6, footY);
-    g.lineTo(cx, bodyEnd);
-    g.lineTo(cx + 6, footY);
+    if (pose === 'walk_0') {
+      g.moveTo(cx - 9, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 3, footY);
+    } else if (pose === 'walk_1') {
+      g.moveTo(cx - 3, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 9, footY);
+    } else {
+      g.moveTo(cx - 6, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 6, footY);
+    }
     g.strokePath();
-    // Arms holding spear
+    // Arms & spear
     const armY = neckY + 6;
-    g.beginPath();
-    g.moveTo(cx - 4, armY + 4);
-    g.lineTo(cx, armY);
-    g.lineTo(cx + 6, armY - 2);
-    g.strokePath();
-    // Spear shaft (long diagonal)
-    g.lineStyle(2, 0x8B4513, 1);
-    g.beginPath();
-    g.moveTo(cx + 2, armY + 8);
-    g.lineTo(cx + 10, armY - 20);
-    g.strokePath();
-    // Spear tip (triangle)
-    g.fillStyle(0xcccccc, 1);
-    g.fillTriangle(
-      cx + 10, armY - 24,
-      cx + 7, armY - 18,
-      cx + 13, armY - 18,
-    );
+    if (pose === 'attack_0') {
+      // Spear pulled back
+      g.lineStyle(2, color, 1);
+      g.beginPath();
+      g.moveTo(cx - 4, armY + 4);
+      g.lineTo(cx, armY);
+      g.lineTo(cx + 4, armY);
+      g.strokePath();
+      g.lineStyle(2, 0x8B4513, 1);
+      g.beginPath();
+      g.moveTo(cx - 2, armY + 4);
+      g.lineTo(cx + 6, armY - 14);
+      g.strokePath();
+      g.fillStyle(0xcccccc, 1);
+      g.fillTriangle(cx + 6, armY - 18, cx + 3, armY - 12, cx + 9, armY - 12);
+    } else if (pose === 'attack_1') {
+      // Spear thrust forward
+      g.lineStyle(2, color, 1);
+      g.beginPath();
+      g.moveTo(cx - 4, armY + 2);
+      g.lineTo(cx, armY);
+      g.lineTo(cx + 8, armY - 2);
+      g.strokePath();
+      g.lineStyle(2, 0x8B4513, 1);
+      g.beginPath();
+      g.moveTo(cx + 2, armY + 2);
+      g.lineTo(cx + 16, armY - 8);
+      g.strokePath();
+      g.fillStyle(0xcccccc, 1);
+      g.fillTriangle(cx + 16, armY - 12, cx + 13, armY - 6, cx + 19, armY - 6);
+    } else {
+      // Idle / walk — standard spear pose
+      g.beginPath();
+      g.moveTo(cx - 4, armY + 4);
+      g.lineTo(cx, armY);
+      g.lineTo(cx + 6, armY - 2);
+      g.strokePath();
+      g.lineStyle(2, 0x8B4513, 1);
+      g.beginPath();
+      g.moveTo(cx + 2, armY + 8);
+      g.lineTo(cx + 10, armY - 20);
+      g.strokePath();
+      g.fillStyle(0xcccccc, 1);
+      g.fillTriangle(cx + 10, armY - 24, cx + 7, armY - 18, cx + 13, armY - 18);
+    }
   }
 
-  drawGiant(g, w, h, color) {
+  drawGiant(g, w, h, color, pose = 'idle') {
     const cx = w / 2;
     const headR = 7;
     const headY = 4 + headR;
@@ -510,27 +677,66 @@ export class GameScene extends Phaser.Scene {
     g.strokePath();
     // Legs (thicker)
     g.beginPath();
-    g.moveTo(cx - 8, footY);
-    g.lineTo(cx, bodyEnd);
-    g.lineTo(cx + 8, footY);
+    if (pose === 'walk_0') {
+      g.moveTo(cx - 12, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 4, footY);
+    } else if (pose === 'walk_1') {
+      g.moveTo(cx - 4, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 12, footY);
+    } else {
+      g.moveTo(cx - 8, footY);
+      g.lineTo(cx, bodyEnd);
+      g.lineTo(cx + 8, footY);
+    }
     g.strokePath();
-    // Arms raised overhead holding club
+    // Arms & club
     const armY = neckY + 8;
     g.lineStyle(3, color, 1);
-    g.beginPath();
-    g.moveTo(cx - 10, armY + 4);
-    g.lineTo(cx, armY);
-    g.lineTo(cx + 10, armY - 8);
-    g.strokePath();
-    // Club shaft (raised to the right)
-    g.lineStyle(3, 0x8B4513, 1);
-    g.beginPath();
-    g.moveTo(cx + 10, armY - 8);
-    g.lineTo(cx + 14, armY - 22);
-    g.strokePath();
-    // Club head (circle at top)
-    g.fillStyle(0x664422, 1);
-    g.fillCircle(cx + 14, armY - 25, 5);
+    if (pose === 'attack_0') {
+      // Club raised high overhead
+      g.beginPath();
+      g.moveTo(cx - 10, armY + 4);
+      g.lineTo(cx, armY);
+      g.lineTo(cx + 6, armY - 12);
+      g.strokePath();
+      g.lineStyle(3, 0x8B4513, 1);
+      g.beginPath();
+      g.moveTo(cx + 6, armY - 12);
+      g.lineTo(cx + 4, armY - 28);
+      g.strokePath();
+      g.fillStyle(0x664422, 1);
+      g.fillCircle(cx + 4, armY - 31, 5);
+    } else if (pose === 'attack_1') {
+      // Club swung down
+      g.beginPath();
+      g.moveTo(cx - 10, armY + 4);
+      g.lineTo(cx, armY);
+      g.lineTo(cx + 12, armY + 6);
+      g.strokePath();
+      g.lineStyle(3, 0x8B4513, 1);
+      g.beginPath();
+      g.moveTo(cx + 12, armY + 6);
+      g.lineTo(cx + 18, armY + 14);
+      g.strokePath();
+      g.fillStyle(0x664422, 1);
+      g.fillCircle(cx + 18, armY + 17, 5);
+    } else {
+      // Idle / walk — club resting on shoulder
+      g.beginPath();
+      g.moveTo(cx - 10, armY + 4);
+      g.lineTo(cx, armY);
+      g.lineTo(cx + 10, armY - 8);
+      g.strokePath();
+      g.lineStyle(3, 0x8B4513, 1);
+      g.beginPath();
+      g.moveTo(cx + 10, armY - 8);
+      g.lineTo(cx + 14, armY - 22);
+      g.strokePath();
+      g.fillStyle(0x664422, 1);
+      g.fillCircle(cx + 14, armY - 25, 5);
+    }
   }
 
   // ── Spawning ────────────────────────────────────────────────
@@ -541,7 +747,7 @@ export class GameScene extends Phaser.Scene {
     this.sfx.playerSpawn();
     this.updateGoldText();
 
-    const w = this.add.sprite(100, GROUND_Y - type.height / 2, textureKey(type.name, 'player')).setDepth(10);
+    const w = this.add.sprite(100, GROUND_Y - type.height / 2, textureKey(type.name, 'player', 'idle')).setDepth(10);
     this.physics.add.existing(w);
     w.body.setSize(type.width, type.height);
     w.body.setOffset(8, 4);
@@ -558,6 +764,9 @@ export class GameScene extends Phaser.Scene {
     w.unitCost = type.cost;
     w.unitWidth = type.width;
     w.unitHeight = type.height;
+    w.unitTypeName = type.name;
+    w.animState = 'walk';
+    w.play(animKey(type.name, 'player', 'walk'));
 
     // HP bar
     w.hpBar = this.add.rectangle(w.x, w.y - type.height / 2 - 6, type.width, 4, 0x00ff00).setDepth(11);
@@ -572,7 +781,7 @@ export class GameScene extends Phaser.Scene {
     const type = Phaser.Utils.Array.GetRandom(affordable);
     this.enemyGold -= type.cost;
     this.sfx.enemySpawn();
-    const e = this.add.sprite(GAME_W - 100, GROUND_Y - type.height / 2, textureKey(type.name, 'enemy')).setDepth(10);
+    const e = this.add.sprite(GAME_W - 100, GROUND_Y - type.height / 2, textureKey(type.name, 'enemy', 'idle')).setDepth(10);
     e.setFlipX(true);
     this.physics.add.existing(e);
     e.body.setSize(type.width, type.height);
@@ -590,12 +799,16 @@ export class GameScene extends Phaser.Scene {
     e.unitCost = type.cost;
     e.unitWidth = type.width;
     e.unitHeight = type.height;
+    e.unitTypeName = type.name;
+    e.animState = 'walk';
+    e.play(animKey(type.name, 'enemy', 'walk'));
 
     e.hpBar = this.add.rectangle(e.x, e.y - type.height / 2 - 6, type.width, 4, 0xff0000).setDepth(11);
   }
 
   // ── Combat ──────────────────────────────────────────────────
   unitFight(warrior, enemy) {
+    if (warrior.dying || enemy.dying) return;
     // Both units stop and attack each other
     warrior.body.setVelocityX(0);
     enemy.body.setVelocityX(0);
@@ -628,7 +841,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Warriors ──────────────────────────────────────────────
     this.warriors.getChildren().forEach((w) => {
-      if (!w.active) return;
+      if (!w.active || w.dying) return;
 
       // If target died, resume walking
       if (w.attackTarget && !w.attackTarget.active) {
@@ -636,8 +849,10 @@ export class GameScene extends Phaser.Scene {
         w.attackTarget = null;
       }
 
+      let newAnimState = 'walk';
       if (w.attacking && w.attackTarget) {
         // Attack another unit
+        newAnimState = 'attack';
         const dmg = w.damage * dt;
         w.attackTarget.hp -= dmg;
         this.accumulateDamage(w.attackTarget, dmg, time);
@@ -648,6 +863,7 @@ export class GameScene extends Phaser.Scene {
         }
       } else if (this.isAtEnemyBase(w)) {
         // Attack enemy base
+        newAnimState = 'attack';
         w.body.setVelocityX(0);
         const dmg = w.damage * dt;
         this.enemyBaseHP -= dmg;
@@ -659,6 +875,12 @@ export class GameScene extends Phaser.Scene {
         w.body.setVelocityX(w.speed);
       }
 
+      // Switch animation only on state change
+      if (w.animState !== newAnimState) {
+        w.animState = newAnimState;
+        w.play(animKey(w.unitTypeName, w.faction, newAnimState));
+      }
+
       // Update HP bar
       if (w.active && w.hpBar) {
         w.hpBar.setPosition(w.x, w.y - w.unitHeight / 2 - 6);
@@ -668,14 +890,16 @@ export class GameScene extends Phaser.Scene {
 
     // ── Enemies ──────────────────────────────────────────────
     this.enemies.getChildren().forEach((e) => {
-      if (!e.active) return;
+      if (!e.active || e.dying) return;
 
       if (e.attackTarget && !e.attackTarget.active) {
         e.attacking = false;
         e.attackTarget = null;
       }
 
+      let newAnimState = 'walk';
       if (e.attacking && e.attackTarget) {
+        newAnimState = 'attack';
         const dmg = e.damage * dt;
         e.attackTarget.hp -= dmg;
         this.accumulateDamage(e.attackTarget, dmg, time);
@@ -685,6 +909,7 @@ export class GameScene extends Phaser.Scene {
           e.attackTarget = null;
         }
       } else if (this.isAtPlayerBase(e)) {
+        newAnimState = 'attack';
         e.body.setVelocityX(0);
         const dmg = e.damage * dt;
         this.playerBaseHP -= dmg;
@@ -694,6 +919,12 @@ export class GameScene extends Phaser.Scene {
         if (this.playerBaseHP <= 0) this.endGame('Game Over');
       } else {
         e.body.setVelocityX(-e.speed);
+      }
+
+      // Switch animation only on state change
+      if (e.animState !== newAnimState) {
+        e.animState = newAnimState;
+        e.play(animKey(e.unitTypeName, e.faction, newAnimState));
       }
 
       if (e.active && e.hpBar) {
@@ -760,6 +991,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   killUnit(unit) {
+    if (unit.dying) return;
+    unit.dying = true;
+
     if (unit.hpBar) unit.hpBar.destroy();
     this.sfx.unitDeath();
     // Award gold for killing enemies (cost / 5)
@@ -768,7 +1002,26 @@ export class GameScene extends Phaser.Scene {
       this.sfx.coinChime();
     }
     this.updateGoldText();
-    unit.destroy();
+
+    // Remove from physics group immediately to stop combat callbacks
+    if (unit.faction === 'player') {
+      this.warriors.remove(unit);
+    } else {
+      this.enemies.remove(unit);
+    }
+    if (unit.body) unit.body.enable = false;
+    unit.stop(); // stop any playing animation
+
+    // Death tween: fall backward and fade out
+    const fallAngle = unit.faction === 'player' ? -90 : 90;
+    this.tweens.add({
+      targets: unit,
+      angle: fallAngle,
+      alpha: 0,
+      duration: 500,
+      ease: 'Power1',
+      onComplete: () => { if (unit.active) unit.destroy(); },
+    });
   }
 
   updateGoldText() {
@@ -780,9 +1033,19 @@ export class GameScene extends Phaser.Scene {
     if (this.music) this.music.stop();
     if (message === 'You Win!') this.sfx.victory();
     else this.sfx.defeat();
-    // Stop all units
-    this.warriors.getChildren().forEach((w) => w.body && w.body.setVelocityX(0));
-    this.enemies.getChildren().forEach((e) => e.body && e.body.setVelocityX(0));
+    // Stop all units and set to idle texture
+    this.warriors.getChildren().forEach((w) => {
+      if (!w.active || w.dying) return;
+      if (w.body) w.body.setVelocityX(0);
+      w.stop();
+      w.setTexture(textureKey(w.unitTypeName, w.faction, 'idle'));
+    });
+    this.enemies.getChildren().forEach((e) => {
+      if (!e.active || e.dying) return;
+      if (e.body) e.body.setVelocityX(0);
+      e.stop();
+      e.setTexture(textureKey(e.unitTypeName, e.faction, 'idle'));
+    });
 
     this.add.text(512, 200, message, {
       fontSize: '48px',
