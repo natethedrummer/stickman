@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { SoundFX } from './SoundFX.js';
+import { DIFFICULTIES } from './MenuScene.js';
 
 const GROUND_Y = 500;
 const GAME_W = 3072;
@@ -10,8 +11,6 @@ const UNIT_TYPES = [
   { name: 'Spearman', cost: 75,  hp: 65,  damage: 12, speed: 60, width: 20, height: 44, color: 0xff8800 },
   { name: 'Giant',    cost: 150, hp: 150, damage: 20, speed: 30, width: 36, height: 52, color: 0x9933ff },
 ];
-
-const ENEMY_SPAWN_INTERVAL = 5000;
 
 const textureKey = (typeName, faction) => `${typeName.toLowerCase()}_${faction}`;
 
@@ -26,7 +25,10 @@ export class GameScene extends Phaser.Scene {
     this.load.audio('bgMusic', 'music/bg-music.mp3');
   }
 
-  create() {
+  create(data) {
+    const diffKey = (data && data.difficulty) || 'medium';
+    this.difficulty = DIFFICULTIES[diffKey] || DIFFICULTIES.medium;
+
     this.generateStickmanTextures();
     this.drawBackground();
 
@@ -64,18 +66,18 @@ export class GameScene extends Phaser.Scene {
     }).setDepth(10);
 
     // ── Gold ────────────────────────────────────────────────
-    this.gold = 100;
-    this.enemyGold = 100;
+    this.gold = this.difficulty.startGold;
+    this.enemyGold = this.difficulty.startGold;
     this.goldText = this.add.text(16, 16, '', { fontSize: '20px', color: '#FFD700' }).setDepth(20);
     this.updateGoldText();
 
-    // passive gold income: +10 per second
+    // passive gold income
     this.time.addEvent({
       delay: 1000,
       loop: true,
       callback: () => {
-        this.gold += 5;
-        this.enemyGold += 5;
+        this.gold += this.difficulty.playerGoldPerSec;
+        this.enemyGold += this.difficulty.enemyGoldPerSec;
         this.updateGoldText();
       },
     });
@@ -108,7 +110,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Enemy spawner ───────────────────────────────────────
     this.time.addEvent({
-      delay: ENEMY_SPAWN_INTERVAL,
+      delay: this.difficulty.enemySpawnInterval,
       loop: true,
       callback: () => this.spawnEnemy(),
     });
@@ -133,6 +135,12 @@ export class GameScene extends Phaser.Scene {
       this.sound.mute = !this.sound.mute;
       this.muteBtn.setText(this.sound.mute ? '♪X' : '♪');
     });
+
+    // ── Difficulty label (HUD) ────────────────────────────────
+    this.add.text(1024 - 80, 48, this.difficulty.label, {
+      fontSize: '14px', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 2,
+    }).setScrollFactor(0).setDepth(20).setOrigin(0.5, 0);
 
     // ── Sound effects ─────────────────────────────────────────
     this.sfx = new SoundFX(() => this.sound.mute);
@@ -572,12 +580,12 @@ export class GameScene extends Phaser.Scene {
     e.body.setCollideWorldBounds(true);
     this.enemies.add(e);
 
-    e.hp = type.hp;
-    e.maxHp = type.hp;
+    e.hp = type.hp * this.difficulty.enemyHpMult;
+    e.maxHp = e.hp;
     e.attacking = false;
     e.attackTarget = null;
     e.speed = type.speed;
-    e.damage = type.damage;
+    e.damage = type.damage * this.difficulty.enemyDmgMult;
     e.faction = 'enemy';
     e.unitCost = type.cost;
     e.unitWidth = type.width;
@@ -782,10 +790,10 @@ export class GameScene extends Phaser.Scene {
       fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
 
-    this.add.text(512, 260, 'Click to restart', {
+    this.add.text(512, 260, 'Click to return to menu', {
       fontSize: '20px', color: '#ffffff',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
 
-    this.input.once('pointerdown', () => this.scene.restart());
+    this.input.once('pointerdown', () => this.scene.start('MenuScene'));
   }
 }
