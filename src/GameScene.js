@@ -12,6 +12,13 @@ const UNIT_TYPES = [
   { name: 'Giant',    cost: 150, hp: 150, damage: 20, speed: 30, width: 36, height: 52, color: 0x9933ff },
 ];
 
+const ABILITIES = [
+  { id: 'rainOfArrows', name: 'Rain of Arrows', cost: 100, description: '30 dmg to all enemies', type: 'instant', cooldown: 15, color: 0xff4444 },
+  { id: 'healBase',     name: 'Heal Base',      cost: 75,  description: 'Restore 100 HP to base', type: 'instant', cooldown: 20, color: 0x44ff44 },
+  { id: 'warDrums',     name: 'War Drums',      cost: 100, description: '+20% unit speed',        type: 'passive', cooldown: 0,  color: 0xff8800 },
+  { id: 'goldMine',     name: 'Gold Mine',       cost: 150, description: '2x gold income',        type: 'passive', cooldown: 0,  color: 0xffd700 },
+];
+
 const textureKey = (typeName, faction, pose = 'idle') => `${typeName.toLowerCase()}_${faction}_${pose}`;
 const animKey = (typeName, faction, state) => `${typeName.toLowerCase()}_${faction}_${state}`;
 
@@ -77,7 +84,7 @@ export class GameScene extends Phaser.Scene {
       delay: 1000,
       loop: true,
       callback: () => {
-        this.gold += this.difficulty.playerGoldPerSec;
+        this.gold += this.difficulty.playerGoldPerSec * this.goldIncomeMultiplier;
         this.enemyGold += this.difficulty.enemyGoldPerSec;
         this.updateGoldText();
       },
@@ -136,6 +143,14 @@ export class GameScene extends Phaser.Scene {
       this.sound.mute = !this.sound.mute;
       this.muteBtn.setText(this.sound.mute ? '♪X' : '♪');
     });
+
+    // ── Shop button (top-right, left of mute) ─────────────────
+    const shopBtnBg = this.add.rectangle(1024 - 100, 28, 50, 28, 0x886600, 0.9)
+      .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+    this.add.text(1024 - 100, 28, 'Shop', {
+      fontSize: '14px', color: '#FFD700', fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+    shopBtnBg.on('pointerdown', () => this.toggleShop());
 
     // ── Difficulty label (HUD) ────────────────────────────────
     this.add.text(1024 - 80, 48, this.difficulty.label, {
@@ -199,6 +214,16 @@ export class GameScene extends Phaser.Scene {
 
     // ── Game-over flag ──────────────────────────────────────
     this.gameOver = false;
+
+    // ── Shop state ────────────────────────────────────────────
+    this.purchasedPassives = new Set();
+    this.abilityCooldowns = {};
+    this.speedMultiplier = 1;
+    this.goldIncomeMultiplier = 1;
+    this.shopOpen = false;
+    this.shopElements = [];
+    this.shopCooldownTimer = null;
+    this.activeBuffsText = null;
   }
 
   // ── Texture generation ─────────────────────────────────────
@@ -758,7 +783,7 @@ export class GameScene extends Phaser.Scene {
     w.maxHp = type.hp;
     w.attacking = false;
     w.attackTarget = null;
-    w.speed = type.speed;
+    w.speed = type.speed * this.speedMultiplier;
     w.damage = type.damage;
     w.faction = 'player';
     w.unitCost = type.cost;
@@ -837,6 +862,14 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.scrollX -= camSpeed * dt;
     } else if (this.cursors.right.isDown || this.camRight) {
       this.cameras.main.scrollX += camSpeed * dt;
+    }
+
+    // ── Ability cooldowns ─────────────────────────────────────
+    for (const id in this.abilityCooldowns) {
+      if (this.abilityCooldowns[id] > 0) {
+        this.abilityCooldowns[id] -= dt;
+        if (this.abilityCooldowns[id] < 0) this.abilityCooldowns[id] = 0;
+      }
     }
 
     // ── Warriors ──────────────────────────────────────────────
@@ -1028,8 +1061,241 @@ export class GameScene extends Phaser.Scene {
     if (this.goldText) this.goldText.setText(`Gold: ${this.gold}`);
   }
 
+  // ── Shop ──────────────────────────────────────────────────
+
+  toggleShop() {
+    if (this.gameOver) return;
+    if (this.shopOpen) {
+      this.closeShop();
+    } else {
+      this.openShop();
+    }
+  }
+
+  openShop() {
+    this.shopOpen = true;
+    this.shopElements = [];
+
+    // Backdrop — blocks clicks to game underneath
+    const backdrop = this.add.rectangle(512, 288, 1024, 576, 0x000000, 0.5)
+      .setScrollFactor(0).setDepth(29).setInteractive();
+    backdrop.on('pointerdown', () => this.closeShop());
+    this.shopElements.push(backdrop);
+
+    // Panel
+    const panelW = 460;
+    const panelH = 380;
+    const panelX = 512;
+    const panelY = 288;
+
+    const panel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x1a1a2e, 0.95)
+      .setScrollFactor(0).setDepth(30).setStrokeStyle(2, 0xffd700);
+    panel.setInteractive(); // prevent click-through to backdrop
+    this.shopElements.push(panel);
+
+    // Title
+    const title = this.add.text(panelX, panelY - panelH / 2 + 25, 'ABILITIES SHOP', {
+      fontSize: '20px', color: '#FFD700', fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
+    this.shopElements.push(title);
+
+    // Close button
+    const closeBtn = this.add.text(panelX + panelW / 2 - 20, panelY - panelH / 2 + 10, 'X', {
+      fontSize: '18px', color: '#ff4444', fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(32).setInteractive({ useHandCursor: true });
+    closeBtn.on('pointerdown', () => this.closeShop());
+    this.shopElements.push(closeBtn);
+
+    // Ability rows
+    const rowStartY = panelY - panelH / 2 + 70;
+    const rowH = 70;
+
+    ABILITIES.forEach((ability, i) => {
+      const rowY = rowStartY + i * rowH;
+      const leftX = panelX - panelW / 2 + 20;
+
+      // Color icon
+      const icon = this.add.rectangle(leftX + 15, rowY + 15, 26, 26, ability.color)
+        .setScrollFactor(0).setDepth(31);
+      this.shopElements.push(icon);
+
+      // Name
+      const nameText = this.add.text(leftX + 38, rowY, ability.name, {
+        fontSize: '15px', color: '#ffffff', fontStyle: 'bold',
+      }).setScrollFactor(0).setDepth(31);
+      this.shopElements.push(nameText);
+
+      // Description
+      const descText = this.add.text(leftX + 38, rowY + 20, ability.description, {
+        fontSize: '12px', color: '#aaaaaa',
+      }).setScrollFactor(0).setDepth(31);
+      this.shopElements.push(descText);
+
+      // Cost
+      const costText = this.add.text(leftX + 38, rowY + 38, `${ability.cost}g`, {
+        fontSize: '12px', color: '#FFD700',
+      }).setScrollFactor(0).setDepth(31);
+      this.shopElements.push(costText);
+
+      // Button
+      const btnX = panelX + panelW / 2 - 60;
+      const btnY = rowY + 18;
+
+      let btnLabel = '';
+      let btnColor = 0x228822;
+      let clickable = true;
+
+      if (ability.type === 'passive' && this.purchasedPassives.has(ability.id)) {
+        btnLabel = 'OWNED';
+        btnColor = 0x555555;
+        clickable = false;
+      } else if (this.abilityCooldowns[ability.id] && this.abilityCooldowns[ability.id] > 0) {
+        btnLabel = `${Math.ceil(this.abilityCooldowns[ability.id])}s`;
+        btnColor = 0x555555;
+        clickable = false;
+      } else if (this.gold < ability.cost) {
+        btnLabel = ability.type === 'passive' ? 'BUY' : 'USE';
+        btnColor = 0x661111;
+        clickable = true; // will show error buzz
+      } else {
+        btnLabel = ability.type === 'passive' ? 'BUY' : 'USE';
+        btnColor = 0x228822;
+      }
+
+      const btnBg = this.add.rectangle(btnX, btnY, 70, 30, btnColor, 0.9)
+        .setScrollFactor(0).setDepth(31).setInteractive({ useHandCursor: clickable });
+      this.shopElements.push(btnBg);
+
+      const btnText = this.add.text(btnX, btnY, btnLabel, {
+        fontSize: '13px', color: '#ffffff', fontStyle: 'bold',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(32);
+      this.shopElements.push(btnText);
+
+      if (clickable) {
+        btnBg.on('pointerdown', () => this.purchaseAbility(ability));
+      }
+    });
+
+    // Refresh timer — rebuilds panel every second while open to update cooldowns/gold
+    this.shopCooldownTimer = this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        if (this.shopOpen) {
+          this.closeShop();
+          this.openShop();
+        }
+      },
+    });
+  }
+
+  closeShop() {
+    this.shopOpen = false;
+    this.shopElements.forEach((el) => el.destroy());
+    this.shopElements = [];
+    if (this.shopCooldownTimer) {
+      this.shopCooldownTimer.destroy();
+      this.shopCooldownTimer = null;
+    }
+  }
+
+  purchaseAbility(ability) {
+    if (this.gameOver) return;
+
+    // Check if passive already owned
+    if (ability.type === 'passive' && this.purchasedPassives.has(ability.id)) return;
+
+    // Check cooldown
+    if (this.abilityCooldowns[ability.id] && this.abilityCooldowns[ability.id] > 0) return;
+
+    // Check gold
+    if (this.gold < ability.cost) {
+      this.sfx.errorBuzz();
+      return;
+    }
+
+    this.gold -= ability.cost;
+    this.updateGoldText();
+    this.sfx.abilityPurchase();
+
+    this.applyAbility(ability);
+
+    // Refresh shop UI
+    this.closeShop();
+    this.openShop();
+  }
+
+  applyAbility(ability) {
+    switch (ability.id) {
+      case 'rainOfArrows': this.applyRainOfArrows(ability); break;
+      case 'healBase':     this.applyHealBase(ability);     break;
+      case 'warDrums':     this.applyWarDrums(ability);     break;
+      case 'goldMine':     this.applyGoldMine(ability);     break;
+    }
+  }
+
+  applyRainOfArrows(ability) {
+    this.abilityCooldowns[ability.id] = ability.cooldown;
+    this.sfx.rainOfArrows();
+    this.cameras.main.flash(300, 255, 100, 100);
+
+    this.enemies.getChildren().forEach((e) => {
+      if (!e.active || e.dying) return;
+      e.hp -= 30;
+      this.showDamageNumber(e.x, e.y - e.unitHeight / 2, 30, '#ff4444');
+      if (e.hp <= 0) this.killUnit(e);
+    });
+  }
+
+  applyHealBase(ability) {
+    this.abilityCooldowns[ability.id] = ability.cooldown;
+    this.sfx.healEffect();
+    this.cameras.main.flash(300, 100, 255, 100);
+
+    const healed = Math.min(100, BASE_HP - this.playerBaseHP);
+    this.playerBaseHP = Math.min(BASE_HP, this.playerBaseHP + 100);
+    this.playerHPText.setText(`HP: ${Math.ceil(this.playerBaseHP)}`);
+    if (healed > 0) {
+      this.showDamageNumber(this.playerBase.x, this.playerBase.y - 60, healed, '#44ff44');
+    }
+  }
+
+  applyWarDrums(ability) {
+    this.purchasedPassives.add(ability.id);
+    this.speedMultiplier = 1.2;
+
+    // Boost all existing warriors
+    this.warriors.getChildren().forEach((w) => {
+      if (!w.active || w.dying) return;
+      w.speed *= 1.2;
+    });
+
+    this.updateActiveBuffsDisplay();
+  }
+
+  applyGoldMine(ability) {
+    this.purchasedPassives.add(ability.id);
+    this.goldIncomeMultiplier = 2;
+    this.updateActiveBuffsDisplay();
+  }
+
+  updateActiveBuffsDisplay() {
+    if (this.activeBuffsText) this.activeBuffsText.destroy();
+
+    const buffs = [];
+    if (this.purchasedPassives.has('warDrums')) buffs.push('War Drums');
+    if (this.purchasedPassives.has('goldMine')) buffs.push('Gold Mine');
+
+    if (buffs.length > 0) {
+      this.activeBuffsText = this.add.text(16, 40, buffs.join(' | '), {
+        fontSize: '12px', color: '#88ff88',
+      }).setScrollFactor(0).setDepth(20);
+    }
+  }
+
   endGame(message) {
     this.gameOver = true;
+    if (this.shopOpen) this.closeShop();
     if (this.music) this.music.stop();
     if (message === 'You Win!') this.sfx.victory();
     else this.sfx.defeat();

@@ -110,4 +110,18 @@ export class SoundFX {
   errorBuzz() {
     this.tone(150, 100, 0.15, 'sawtooth', 0.12);
   }
+
+  abilityPurchase() {
+    this.arpeggio([523, 659, 784], 0.08, 'sine', 0.12);
+  }
+
+  rainOfArrows() {
+    this.noise(0.15, 0.12);
+    this.tone(2000, 4000, 0.2, 'sine', 0.08);
+  }
+
+  healEffect() {
+    this.tone(400, 600, 0.2, 'sine', 0.1);
+    setTimeout(() => this.tone(500, 800, 0.2, 'sine', 0.08), 100);
+  }
 }
