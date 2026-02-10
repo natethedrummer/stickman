@@ -19,6 +19,14 @@ const ABILITIES = [
   { id: 'goldMine',     name: 'Gold Mine',       cost: 150, description: '2x gold income',        type: 'passive', cooldown: 0,  color: 0xffd700 },
 ];
 
+const WEATHER_TYPES = [
+  { id: 'sunny',        name: 'Sunny',        speedMult: 1.0, dmgMult: 1.0, archerDmgMult: 1.0 },
+  { id: 'rain',         name: 'Rain',         speedMult: 0.9, dmgMult: 1.0, archerDmgMult: 1.0 },
+  { id: 'snow',         name: 'Snow',         speedMult: 0.8, dmgMult: 1.0, archerDmgMult: 1.0 },
+  { id: 'fog',          name: 'Fog',          speedMult: 1.0, dmgMult: 1.0, archerDmgMult: 0.7 },
+  { id: 'thunderstorm', name: 'Thunderstorm', speedMult: 0.9, dmgMult: 1.1, archerDmgMult: 1.0 },
+];
+
 const textureKey = (typeName, faction, pose = 'idle') => `${typeName.toLowerCase()}_${faction}_${pose}`;
 const animKey = (typeName, faction, state) => `${typeName.toLowerCase()}_${faction}_${state}`;
 
@@ -224,6 +232,18 @@ export class GameScene extends Phaser.Scene {
     this.shopElements = [];
     this.shopCooldownTimer = null;
     this.activeBuffsText = null;
+
+    // ── Weather ────────────────────────────────────────────────
+    this.weather = Phaser.Utils.Array.GetRandom(WEATHER_TYPES);
+    this.setupWeather();
+
+    // Weather HUD label
+    const weatherIcons = { sunny: '\u2600', rain: '\u{1F327}', snow: '\u2744', fog: '\u{1F32B}', thunderstorm: '\u26A1' };
+    const weatherIcon = weatherIcons[this.weather.id] || '';
+    this.weatherText = this.add.text(16, 56, `${weatherIcon} ${this.weather.name}`, {
+      fontSize: '13px', color: '#dddddd',
+      stroke: '#000000', strokeThickness: 2,
+    }).setScrollFactor(0).setDepth(20);
   }
 
   // ── Texture generation ─────────────────────────────────────
@@ -412,6 +432,72 @@ export class GameScene extends Phaser.Scene {
     treeG.generateTexture('bg_trees', treeW, GROUND_Y);
     treeG.destroy();
     this.add.image(treeW / 2, GROUND_Y / 2, 'bg_trees').setScrollFactor(0.7).setDepth(4);
+  }
+
+  // ── Weather visuals ────────────────────────────────────────
+  setupWeather() {
+    const w = this.weather;
+    if (w.id === 'sunny') return;
+
+    if (w.id === 'rain' || w.id === 'thunderstorm') {
+      // Generate rain drop texture
+      const rainG = this.add.graphics();
+      rainG.fillStyle(0x6688cc, 1);
+      rainG.fillRect(0, 0, 2, 8);
+      rainG.generateTexture('rain_drop', 2, 8);
+      rainG.destroy();
+
+      this.add.particles(0, 0, 'rain_drop', {
+        x: { min: 0, max: 1024 },
+        y: -10,
+        speedY: { min: 300, max: 500 },
+        speedX: { min: -50, max: -30 },
+        lifespan: 1500,
+        quantity: 3,
+        frequency: 20,
+        alpha: { start: 0.6, end: 0.2 },
+        scale: { min: 0.8, max: 1.2 },
+      }).setScrollFactor(0).setDepth(6);
+
+      if (w.id === 'thunderstorm') {
+        // Periodic lightning flash with varying interval
+        const scheduleLightning = () => {
+          this.time.delayedCall(4000 + Math.random() * 6000, () => {
+            if (this.gameOver) return;
+            this.cameras.main.flash(150, 255, 255, 255);
+            this.sfx.thunder();
+            scheduleLightning();
+          });
+        };
+        scheduleLightning();
+      }
+    }
+
+    if (w.id === 'snow') {
+      // Generate snowflake texture
+      const snowG = this.add.graphics();
+      snowG.fillStyle(0xffffff, 1);
+      snowG.fillCircle(2, 2, 2);
+      snowG.generateTexture('snowflake', 4, 4);
+      snowG.destroy();
+
+      this.add.particles(0, 0, 'snowflake', {
+        x: { min: 0, max: 1024 },
+        y: -10,
+        speedY: { min: 40, max: 100 },
+        speedX: { min: -20, max: 20 },
+        lifespan: 6000,
+        quantity: 1,
+        frequency: 60,
+        alpha: { start: 0.9, end: 0.3 },
+        scale: { min: 0.6, max: 1.4 },
+      }).setScrollFactor(0).setDepth(6);
+    }
+
+    if (w.id === 'fog') {
+      this.add.rectangle(512, 288, 1024, 576, 0xcccccc, 0.3)
+        .setScrollFactor(0).setDepth(6);
+    }
   }
 
   drawArcher(g, w, h, color, pose = 'idle') {
@@ -783,8 +869,9 @@ export class GameScene extends Phaser.Scene {
     w.maxHp = type.hp;
     w.attacking = false;
     w.attackTarget = null;
-    w.speed = type.speed * this.speedMultiplier;
-    w.damage = type.damage;
+    w.speed = type.speed * this.speedMultiplier * this.weather.speedMult;
+    const dmgMult = type.name === 'Archer' ? this.weather.archerDmgMult : this.weather.dmgMult;
+    w.damage = type.damage * dmgMult;
     w.faction = 'player';
     w.unitCost = type.cost;
     w.unitWidth = type.width;
@@ -818,8 +905,9 @@ export class GameScene extends Phaser.Scene {
     e.maxHp = e.hp;
     e.attacking = false;
     e.attackTarget = null;
-    e.speed = type.speed;
-    e.damage = type.damage * this.difficulty.enemyDmgMult;
+    e.speed = type.speed * this.weather.speedMult;
+    const eDmgMult = type.name === 'Archer' ? this.weather.archerDmgMult : this.weather.dmgMult;
+    e.damage = type.damage * this.difficulty.enemyDmgMult * eDmgMult;
     e.faction = 'enemy';
     e.unitCost = type.cost;
     e.unitWidth = type.width;

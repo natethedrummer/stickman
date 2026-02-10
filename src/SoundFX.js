@@ -124,4 +124,10 @@ export class SoundFX {
     this.tone(400, 600, 0.2, 'sine', 0.1);
     setTimeout(() => this.tone(500, 800, 0.2, 'sine', 0.08), 100);
   }
+
+  thunder() {
+    this.noise(0.4, 0.2);
+    this.tone(50, 30, 0.5, 'sine', 0.15);
+    setTimeout(() => this.tone(40, 20, 0.3, 'sine', 0.1), 200);
+  }
 }
