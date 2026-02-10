@@ -168,7 +168,7 @@ export class GameScene extends Phaser.Scene {
     this.camRight = false;
 
     const arrowBtnSize = 56;
-    const arrowY = 576 - arrowBtnSize / 2 - 12;
+    const arrowY = 576 - arrowBtnSize / 2 - 60;
     const arrowLeftX = arrowBtnSize / 2 + 12;
     const arrowRightX = arrowLeftX + arrowBtnSize + 10;
 
