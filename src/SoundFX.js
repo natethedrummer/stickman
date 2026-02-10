@@ -130,4 +130,10 @@ export class SoundFX {
     this.tone(50, 30, 0.5, 'sine', 0.15);
     setTimeout(() => this.tone(40, 20, 0.3, 'sine', 0.1), 200);
   }
+
+  shieldBlock() {
+    this.noise(0.04, 0.08);
+    this.tone(800, 1200, 0.06, 'square', 0.1);
+    this.tone(1200, 600, 0.08, 'triangle', 0.08);
+  }
 }

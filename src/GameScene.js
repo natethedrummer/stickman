@@ -6,10 +6,10 @@ const GROUND_Y = 500;
 const GAME_W = 3072;
 
 const UNIT_TYPES = [
-  { name: 'Archer',   cost: 25,  hp: 25,  damage: 15, speed: 50, width: 16, height: 32, color: 0x33cc33 },
-  { name: 'Warrior',  cost: 50,  hp: 50,  damage: 10, speed: 50, width: 24, height: 40, color: 0x3399ff },
-  { name: 'Spearman', cost: 75,  hp: 65,  damage: 12, speed: 60, width: 20, height: 44, color: 0xff8800 },
-  { name: 'Giant',    cost: 150, hp: 150, damage: 20, speed: 30, width: 36, height: 52, color: 0x9933ff },
+  { name: 'Archer',   cost: 25,  hp: 25,  damage: 15, speed: 50, width: 16, height: 32, color: 0x33cc33, blockReduction: 0,   blockDuration: 0,   blockCooldown: 0 },
+  { name: 'Warrior',  cost: 50,  hp: 50,  damage: 10, speed: 50, width: 24, height: 40, color: 0x3399ff, blockReduction: 0.5, blockDuration: 1.5, blockCooldown: 3 },
+  { name: 'Spearman', cost: 75,  hp: 65,  damage: 12, speed: 60, width: 20, height: 44, color: 0xff8800, blockReduction: 0,   blockDuration: 0,   blockCooldown: 0 },
+  { name: 'Giant',    cost: 150, hp: 150, damage: 20, speed: 30, width: 36, height: 52, color: 0x9933ff, blockReduction: 0.6, blockDuration: 2,   blockCooldown: 4 },
 ];
 
 const ABILITIES = [
@@ -275,6 +275,15 @@ export class GameScene extends Phaser.Scene {
         });
       });
     });
+
+    // Shield icon texture for blocking units
+    const shieldG = this.add.graphics();
+    shieldG.fillStyle(0x4488ff, 1);
+    shieldG.fillRect(1, 0, 8, 10);
+    shieldG.lineStyle(1, 0xaaccff, 1);
+    shieldG.strokeRect(1, 0, 8, 10);
+    shieldG.generateTexture('shield_icon', 10, 10);
+    shieldG.destroy();
 
     this.createAnimations();
   }
@@ -880,6 +889,14 @@ export class GameScene extends Phaser.Scene {
     w.animState = 'walk';
     w.play(animKey(type.name, 'player', 'walk'));
 
+    // Block state
+    w.blockReduction = type.blockReduction;
+    w.blockDuration = type.blockDuration;
+    w.blockCooldown = type.blockCooldown;
+    w.blocking = false;
+    w.blockTimer = 0;
+    w.blockCooldownTimer = type.blockReduction > 0 ? type.blockCooldown : 0;
+
     // HP bar
     w.hpBar = this.add.rectangle(w.x, w.y - type.height / 2 - 6, type.width, 4, 0x00ff00).setDepth(11);
   }
@@ -916,6 +933,14 @@ export class GameScene extends Phaser.Scene {
     e.animState = 'walk';
     e.play(animKey(type.name, 'enemy', 'walk'));
 
+    // Block state
+    e.blockReduction = type.blockReduction;
+    e.blockDuration = type.blockDuration;
+    e.blockCooldown = type.blockCooldown;
+    e.blocking = false;
+    e.blockTimer = 0;
+    e.blockCooldownTimer = type.blockReduction > 0 ? type.blockCooldown : 0;
+
     e.hpBar = this.add.rectangle(e.x, e.y - type.height / 2 - 6, type.width, 4, 0xff0000).setDepth(11);
   }
 
@@ -935,6 +960,45 @@ export class GameScene extends Phaser.Scene {
     if (now - this.lastCombatHitTime > 300) {
       this.lastCombatHitTime = now;
       this.sfx.combatHit();
+    }
+  }
+
+  // ── Block timer logic ────────────────────────────────────────
+  updateUnitBlock(unit, dt) {
+    if (unit.blockReduction <= 0) return;
+
+    if (unit.blocking) {
+      unit.blockTimer -= dt;
+      if (unit.blockTimer <= 0) {
+        // End blocking, start cooldown
+        unit.blocking = false;
+        unit.blockCooldownTimer = unit.blockCooldown;
+        if (unit.shieldIcon) unit.shieldIcon.setVisible(false);
+        unit.clearTint();
+      }
+    } else {
+      unit.blockCooldownTimer -= dt;
+      if (unit.blockCooldownTimer <= 0) {
+        // Start blocking
+        unit.blocking = true;
+        unit.blockTimer = unit.blockDuration;
+        unit.setTint(0xccddff);
+        this.sfx.shieldBlock();
+
+        // Show shield icon
+        if (!unit.shieldIcon) {
+          unit.shieldIcon = this.add.sprite(unit.x, unit.y - unit.unitHeight / 2 - 14, 'shield_icon').setDepth(12);
+        }
+        unit.shieldIcon.setVisible(true);
+
+        // Show "BLOCK" floating text
+        this.showDamageNumber(unit.x, unit.y - unit.unitHeight / 2 - 10, 'BLOCK', '#4488ff');
+      }
+    }
+
+    // Position shield icon
+    if (unit.shieldIcon && unit.shieldIcon.visible) {
+      unit.shieldIcon.setPosition(unit.x, unit.y - unit.unitHeight / 2 - 14);
     }
   }
 
@@ -964,6 +1028,8 @@ export class GameScene extends Phaser.Scene {
     this.warriors.getChildren().forEach((w) => {
       if (!w.active || w.dying) return;
 
+      this.updateUnitBlock(w, dt);
+
       // If target died, resume walking
       if (w.attackTarget && !w.attackTarget.active) {
         w.attacking = false;
@@ -974,7 +1040,7 @@ export class GameScene extends Phaser.Scene {
       if (w.attacking && w.attackTarget) {
         // Attack another unit
         newAnimState = 'attack';
-        const dmg = w.damage * dt;
+        const dmg = w.damage * dt * (w.attackTarget.blocking ? (1 - w.attackTarget.blockReduction) : 1);
         w.attackTarget.hp -= dmg;
         this.accumulateDamage(w.attackTarget, dmg, time);
         if (w.attackTarget.hp <= 0) {
@@ -1013,6 +1079,8 @@ export class GameScene extends Phaser.Scene {
     this.enemies.getChildren().forEach((e) => {
       if (!e.active || e.dying) return;
 
+      this.updateUnitBlock(e, dt);
+
       if (e.attackTarget && !e.attackTarget.active) {
         e.attacking = false;
         e.attackTarget = null;
@@ -1021,7 +1089,7 @@ export class GameScene extends Phaser.Scene {
       let newAnimState = 'walk';
       if (e.attacking && e.attackTarget) {
         newAnimState = 'attack';
-        const dmg = e.damage * dt;
+        const dmg = e.damage * dt * (e.attackTarget.blocking ? (1 - e.attackTarget.blockReduction) : 1);
         e.attackTarget.hp -= dmg;
         this.accumulateDamage(e.attackTarget, dmg, time);
         if (e.attackTarget.hp <= 0) {
@@ -1077,7 +1145,7 @@ export class GameScene extends Phaser.Scene {
 
   // ── Helpers ─────────────────────────────────────────────────
   showDamageNumber(x, y, amount, color = '#ffffff') {
-    const txt = this.add.text(x, y - 10, Math.ceil(amount).toString(), {
+    const txt = this.add.text(x, y - 10, typeof amount === 'string' ? amount : Math.ceil(amount).toString(), {
       fontSize: '14px', color, fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 2,
     }).setDepth(15).setOrigin(0.5);
@@ -1116,6 +1184,7 @@ export class GameScene extends Phaser.Scene {
     unit.dying = true;
 
     if (unit.hpBar) unit.hpBar.destroy();
+    if (unit.shieldIcon) unit.shieldIcon.destroy();
     this.sfx.unitDeath();
     // Award gold for killing enemies (cost / 5)
     if (unit.faction === 'enemy') {
