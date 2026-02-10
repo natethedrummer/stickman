@@ -72,6 +72,16 @@ export class MenuScene extends Phaser.Scene {
       }).setOrigin(0.5);
     });
 
+    // How to Play button
+    const tutBtn = this.add.rectangle(cx, 400, 180, 44, 0x336699, 0.9)
+      .setInteractive({ useHandCursor: true });
+    this.add.text(cx, 400, 'How to Play', {
+      fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    tutBtn.on('pointerover', () => tutBtn.setAlpha(1));
+    tutBtn.on('pointerout', () => tutBtn.setAlpha(0.9));
+    tutBtn.on('pointerdown', () => this.scene.start('TutorialScene'));
+
     // Footer
     this.add.text(cx, 480, 'Arrow keys or on-screen buttons to scroll the battlefield', {
       fontSize: '14px', color: '#888888',
