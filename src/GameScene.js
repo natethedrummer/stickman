@@ -177,6 +177,27 @@ export class GameScene extends Phaser.Scene {
       this.muteBtn.setText(this.sound.mute ? '♪X' : '♪');
     });
 
+    // ── Quit button (top-right) ─────────────────────────────────
+    this.quitConfirm = false;
+    const quitBtnBg = this.add.rectangle(1024 - 40, 48, 36, 22, 0x663333, 0.9)
+      .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+    this.quitBtnText = this.add.text(1024 - 40, 48, 'Quit', {
+      fontSize: '11px', color: '#ff8888', fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+    quitBtnBg.on('pointerdown', () => {
+      if (this.quitConfirm) {
+        if (this.music) this.music.stop();
+        this.scene.start('LevelSelectScene');
+      } else {
+        this.quitConfirm = true;
+        this.quitBtnText.setText('Sure?');
+        this.time.delayedCall(2000, () => {
+          this.quitConfirm = false;
+          if (this.quitBtnText.active) this.quitBtnText.setText('Quit');
+        });
+      }
+    });
+
     // ── Shop button (top-right, left of mute) ─────────────────
     const shopBtnBg = this.add.rectangle(1024 - 100, 28, 50, 28, 0x886600, 0.9)
       .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
@@ -186,10 +207,10 @@ export class GameScene extends Phaser.Scene {
     shopBtnBg.on('pointerdown', () => this.toggleShop());
 
     // ── Age name + Difficulty label (HUD) ────────────────────
-    this.add.text(1024 - 80, 48, `${this.ageConfig.name} - ${this.difficulty.label}`, {
+    this.add.text(16, 72, `${this.ageConfig.name} - ${this.difficulty.label}`, {
       fontSize: '13px', color: '#ffffff',
       stroke: '#000000', strokeThickness: 2,
-    }).setScrollFactor(0).setDepth(20).setOrigin(0.5, 0);
+    }).setScrollFactor(0).setDepth(20);
 
     // ── Sound effects ─────────────────────────────────────────
     this.sfx = new SoundFX(() => this.sound.mute);
@@ -263,7 +284,7 @@ export class GameScene extends Phaser.Scene {
     this.setupWeather();
 
     // Weather HUD label
-    const weatherIcons = { sunny: '\u2600', rain: '\u{1F327}', snow: '\u2744', fog: '\u{1F32B}', thunderstorm: '\u26A1' };
+    const weatherIcons = { sunny: '\u2600', rain: '\u2602', snow: '\u2744', fog: '~', thunderstorm: '\u26A1' };
     const weatherIcon = weatherIcons[this.weather.id] || '';
     this.weatherText = this.add.text(16, 56, `${weatherIcon} ${this.weather.name}`, {
       fontSize: '13px', color: '#dddddd',
@@ -1181,13 +1202,13 @@ export class GameScene extends Phaser.Scene {
     this.warriors.getChildren().forEach((w) => {
       if (!w.active) return;
       const dotX = mm.x + (w.x / GAME_W) * mm.w;
-      this.minimapGfx.fillStyle(0x33cc33, 1);
+      this.minimapGfx.fillStyle(this.ageConfig.baseColors.player, 1);
       this.minimapGfx.fillCircle(dotX, mm.y + mm.h / 2, 2);
     });
     this.enemies.getChildren().forEach((e) => {
       if (!e.active) return;
       const dotX = mm.x + (e.x / GAME_W) * mm.w;
-      this.minimapGfx.fillStyle(0xff4444, 1);
+      this.minimapGfx.fillStyle(this.ageConfig.baseColors.enemy, 1);
       this.minimapGfx.fillCircle(dotX, mm.y + mm.h / 2, 2);
     });
   }
@@ -1538,6 +1559,7 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.add.text(512, 200, message, {
         fontSize: '48px', color: '#ff0000', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 4,
       }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
     }
 
