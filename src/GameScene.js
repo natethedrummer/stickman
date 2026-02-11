@@ -71,6 +71,7 @@ export class GameScene extends Phaser.Scene {
 
     this.cleanupTextures();
     this.generateStickmanTextures();
+    this.generateBaseTextures();
     this.drawBackground();
 
     // ── Ground ──────────────────────────────────────────────
@@ -82,28 +83,42 @@ export class GameScene extends Phaser.Scene {
     this.playerBaseHP = this.maxPlayerBaseHP;
     this.enemyBaseHP = this.maxEnemyBaseHP;
 
-    // Player base (left)
-    this.playerBase = this.add.rectangle(60, GROUND_Y - 60, 80, 120, this.ageConfig.baseColors.player).setDepth(10);
+    // Player base (left) — sprite with invisible physics body
+    this.playerBaseStage = 0;
+    this.playerBase = this.add.sprite(60, GROUND_Y - 70, 'base_player_0').setDepth(10);
     this.playerBase.faction = 'player';
-    this.playerBase.unitHeight = 120;
-    this.physics.add.existing(this.playerBase, true);
-    this.playerBaseLabel = this.add.text(20, GROUND_Y - 140, 'Your Base', {
+    this.playerBase.unitHeight = 140;
+    const playerBaseBody = this.add.rectangle(60, GROUND_Y - 60, 80, 120).setAlpha(0).setDepth(10);
+    playerBaseBody.faction = 'player';
+    playerBaseBody.unitHeight = 120;
+    this.physics.add.existing(playerBaseBody, true);
+    this.playerBasePhysics = playerBaseBody;
+    this.playerBaseLabel = this.add.text(20, GROUND_Y - 155, 'Your Base', {
       fontSize: '13px', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 2,
     }).setDepth(10);
-    this.playerHPText = this.add.text(20, GROUND_Y - 125, `HP: ${this.playerBaseHP}`, {
+    this.playerHPText = this.add.text(20, GROUND_Y - 140, `HP: ${this.playerBaseHP}`, {
       fontSize: '12px', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 2,
     }).setDepth(10);
 
-    // Enemy base (right)
-    this.enemyBase = this.add.rectangle(GAME_W - 60, GROUND_Y - 60, 80, 120, this.ageConfig.baseColors.enemy).setDepth(10);
+    // Enemy base (right) — sprite with invisible physics body
+    this.enemyBaseStage = 0;
+    this.enemyBase = this.add.sprite(GAME_W - 60, GROUND_Y - 70, 'base_enemy_0').setDepth(10);
     this.enemyBase.faction = 'enemy';
-    this.enemyBase.unitHeight = 120;
-    this.physics.add.existing(this.enemyBase, true);
-    this.enemyBaseLabel = this.add.text(GAME_W - 110, GROUND_Y - 140, 'Enemy Base', {
+    this.enemyBase.unitHeight = 140;
+    const enemyBaseBody = this.add.rectangle(GAME_W - 60, GROUND_Y - 60, 80, 120).setAlpha(0).setDepth(10);
+    enemyBaseBody.faction = 'enemy';
+    enemyBaseBody.unitHeight = 120;
+    this.physics.add.existing(enemyBaseBody, true);
+    this.enemyBasePhysics = enemyBaseBody;
+    this.enemyBaseLabel = this.add.text(GAME_W - 110, GROUND_Y - 155, 'Enemy Base', {
       fontSize: '13px', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 2,
     }).setDepth(10);
-    this.enemyHPText = this.add.text(GAME_W - 110, GROUND_Y - 125, `HP: ${this.enemyBaseHP}`, {
+    this.enemyHPText = this.add.text(GAME_W - 110, GROUND_Y - 140, `HP: ${this.enemyBaseHP}`, {
       fontSize: '12px', color: '#ffffff',
+      stroke: '#000000', strokeThickness: 2,
     }).setDepth(10);
 
     // ── Gold ────────────────────────────────────────────────
@@ -315,6 +330,14 @@ export class GameScene extends Phaser.Scene {
     ['bg_sky', 'bg_clouds', 'bg_far_mtn', 'bg_near_mtn', 'bg_trees', 'shield_icon', 'rain_drop', 'snowflake'].forEach((key) => {
       if (this.textures.exists(key)) this.textures.remove(key);
     });
+
+    // Remove base textures
+    ['player', 'enemy'].forEach((faction) => {
+      for (let dmg = 0; dmg < 3; dmg++) {
+        const key = `base_${faction}_${dmg}`;
+        if (this.textures.exists(key)) this.textures.remove(key);
+      }
+    });
   }
 
   // ── Texture generation ─────────────────────────────────────
@@ -385,6 +408,441 @@ export class GameScene extends Phaser.Scene {
         });
       });
     });
+  }
+
+  // ── Base texture generation ──────────────────────────────
+  generateBaseTextures() {
+    const w = 100;
+    const h = 140;
+    const style = this.ageConfig.baseStyle;
+    const drawFns = {
+      cave: this.drawCaveBase,
+      castle: this.drawCastleBase,
+      bunker: this.drawBunkerBase,
+      scifi: this.drawScifiBase,
+    };
+    const drawFn = drawFns[style] || drawFns.cave;
+
+    ['player', 'enemy'].forEach((faction) => {
+      const color = this.ageConfig.baseColors[faction];
+      for (let dmg = 0; dmg < 3; dmg++) {
+        const g = this.add.graphics();
+        drawFn(g, w, h, color, dmg);
+        g.generateTexture(`base_${faction}_${dmg}`, w, h);
+        g.destroy();
+      }
+    });
+  }
+
+  drawCaveBase(g, w, h, color, damageLevel) {
+    const baseY = h;
+    const darkerColor = Phaser.Display.Color.ValueToColor(color).darken(20).color;
+    const lighterColor = Phaser.Display.Color.ValueToColor(color).lighten(15).color;
+
+    // Main rock mound shape
+    g.fillStyle(color, 1);
+    g.beginPath();
+    g.moveTo(5, baseY);
+    g.lineTo(8, baseY - 60);
+    g.lineTo(15, baseY - 90);
+    g.lineTo(25, baseY - 110);
+    g.lineTo(35, baseY - 125);
+    g.lineTo(50, baseY - 135);
+    g.lineTo(65, baseY - 125);
+    g.lineTo(75, baseY - 110);
+    g.lineTo(85, baseY - 90);
+    g.lineTo(92, baseY - 60);
+    g.lineTo(95, baseY);
+    g.closePath();
+    g.fillPath();
+
+    // Rock texture lines
+    g.lineStyle(1, darkerColor, 0.6);
+    g.beginPath();
+    g.moveTo(20, baseY - 100);
+    g.lineTo(40, baseY - 95);
+    g.strokePath();
+    g.beginPath();
+    g.moveTo(55, baseY - 110);
+    g.lineTo(75, baseY - 95);
+    g.strokePath();
+    g.beginPath();
+    g.moveTo(15, baseY - 70);
+    g.lineTo(35, baseY - 65);
+    g.strokePath();
+
+    // Cave arch opening
+    g.fillStyle(0x111111, 1);
+    g.beginPath();
+    g.moveTo(30, baseY);
+    g.lineTo(30, baseY - 40);
+    g.arc(50, baseY - 40, 20, Math.PI, 0, false);
+    g.lineTo(70, baseY);
+    g.closePath();
+    g.fillPath();
+
+    // Arch outline
+    g.lineStyle(2, lighterColor, 0.8);
+    g.beginPath();
+    g.moveTo(30, baseY);
+    g.lineTo(30, baseY - 40);
+    g.arc(50, baseY - 40, 20, Math.PI, 0, false);
+    g.lineTo(70, baseY);
+    g.strokePath();
+
+    // Boulder at entrance
+    g.fillStyle(darkerColor, 0.8);
+    g.fillCircle(35, baseY - 5, 6);
+
+    if (damageLevel >= 1) {
+      // Cracks
+      g.lineStyle(2, 0x222222, 0.7);
+      g.beginPath();
+      g.moveTo(60, baseY - 120);
+      g.lineTo(55, baseY - 100);
+      g.lineTo(62, baseY - 85);
+      g.strokePath();
+      g.beginPath();
+      g.moveTo(25, baseY - 95);
+      g.lineTo(30, baseY - 80);
+      g.strokePath();
+      // Missing chunk from top
+      g.fillStyle(0x000000, 0.15);
+      g.fillTriangle(45, baseY - 135, 55, baseY - 135, 50, baseY - 120);
+    }
+
+    if (damageLevel >= 2) {
+      // More cracks
+      g.lineStyle(2, 0x222222, 0.8);
+      g.beginPath();
+      g.moveTo(35, baseY - 110);
+      g.lineTo(40, baseY - 90);
+      g.lineTo(35, baseY - 75);
+      g.strokePath();
+      // Fallen rocks / rubble
+      g.fillStyle(darkerColor, 0.9);
+      g.fillCircle(15, baseY - 5, 5);
+      g.fillCircle(85, baseY - 8, 4);
+      g.fillCircle(80, baseY - 3, 3);
+      // Fire/smoke accent at top
+      g.fillStyle(0xff6600, 0.5);
+      g.fillCircle(50, baseY - 130, 4);
+      g.fillStyle(0xff9933, 0.3);
+      g.fillCircle(47, baseY - 136, 3);
+      g.fillCircle(54, baseY - 134, 3);
+    }
+  }
+
+  drawCastleBase(g, w, h, color, damageLevel) {
+    const baseY = h;
+    const darkerColor = Phaser.Display.Color.ValueToColor(color).darken(15).color;
+    const lighterColor = Phaser.Display.Color.ValueToColor(color).lighten(10).color;
+
+    // Main walls
+    g.fillStyle(color, 1);
+    g.fillRect(15, baseY - 110, 70, 110);
+
+    // Crenellations (merlons)
+    const merlonW = 10;
+    const merlonH = 12;
+    const merlonGap = 4;
+    const merlonY = baseY - 110 - merlonH;
+    let merlonX = 15;
+    const merlons = [];
+    while (merlonX + merlonW <= 85) {
+      merlons.push(merlonX);
+      g.fillStyle(color, 1);
+      if (damageLevel < 1 || merlonX < 55) {
+        g.fillRect(merlonX, merlonY, merlonW, merlonH);
+      }
+      merlonX += merlonW + merlonGap;
+    }
+
+    // Missing merlons for damage level 1+
+    if (damageLevel >= 1 && merlons.length > 3) {
+      // Leave gap where merlons were removed (already skipped above)
+      g.fillStyle(darkerColor, 0.5);
+      g.fillRect(55, merlonY + 4, merlonW, merlonH - 4);
+    }
+
+    // Gate arch
+    g.fillStyle(0x111111, 1);
+    g.fillRect(35, baseY - 45, 30, 45);
+    g.beginPath();
+    g.arc(50, baseY - 45, 15, Math.PI, 0, false);
+    g.fillPath();
+
+    // Gate outline
+    g.lineStyle(2, lighterColor, 0.7);
+    g.beginPath();
+    g.moveTo(35, baseY);
+    g.lineTo(35, baseY - 45);
+    g.arc(50, baseY - 45, 15, Math.PI, 0, false);
+    g.lineTo(65, baseY);
+    g.strokePath();
+
+    // Wall lines
+    g.lineStyle(1, darkerColor, 0.4);
+    for (let row = baseY - 100; row < baseY - 50; row += 15) {
+      g.beginPath();
+      g.moveTo(15, row);
+      g.lineTo(85, row);
+      g.strokePath();
+    }
+
+    // Vertical mortar lines (staggered)
+    for (let row = baseY - 100; row < baseY - 50; row += 15) {
+      const offset = ((row / 15) % 2 === 0) ? 0 : 10;
+      for (let col = 15 + offset; col < 85; col += 20) {
+        g.beginPath();
+        g.moveTo(col, row);
+        g.lineTo(col, row + 15);
+        g.strokePath();
+      }
+    }
+
+    if (damageLevel >= 1) {
+      // Wall cracks
+      g.lineStyle(2, 0x222222, 0.6);
+      g.beginPath();
+      g.moveTo(70, baseY - 90);
+      g.lineTo(65, baseY - 75);
+      g.lineTo(72, baseY - 60);
+      g.strokePath();
+    }
+
+    if (damageLevel >= 2) {
+      // Heavy wall cracks
+      g.lineStyle(2, 0x222222, 0.8);
+      g.beginPath();
+      g.moveTo(25, baseY - 95);
+      g.lineTo(30, baseY - 80);
+      g.lineTo(22, baseY - 60);
+      g.strokePath();
+      // Rubble pile at base
+      g.fillStyle(darkerColor, 0.8);
+      g.fillCircle(10, baseY - 4, 5);
+      g.fillCircle(90, baseY - 5, 4);
+      g.fillCircle(88, baseY - 2, 3);
+      g.fillCircle(14, baseY - 2, 3);
+      // Fire
+      g.fillStyle(0xff6600, 0.5);
+      g.fillCircle(75, baseY - 105, 4);
+      g.fillStyle(0xff9933, 0.3);
+      g.fillCircle(72, baseY - 110, 3);
+    }
+  }
+
+  drawBunkerBase(g, w, h, color, damageLevel) {
+    const baseY = h;
+    const darkerColor = Phaser.Display.Color.ValueToColor(color).darken(15).color;
+    const lighterColor = Phaser.Display.Color.ValueToColor(color).lighten(10).color;
+
+    // Main concrete slab
+    g.fillStyle(color, 1);
+    g.fillRect(10, baseY - 100, 80, 100);
+
+    // Flat roof / overhang
+    g.fillStyle(darkerColor, 1);
+    g.fillRect(5, baseY - 105, 90, 8);
+
+    // Antenna on roof
+    g.lineStyle(2, lighterColor, 0.8);
+    g.beginPath();
+    g.moveTo(70, baseY - 105);
+    g.lineTo(70, baseY - 125);
+    g.strokePath();
+    g.lineStyle(1, lighterColor, 0.6);
+    g.beginPath();
+    g.moveTo(65, baseY - 120);
+    g.lineTo(75, baseY - 120);
+    g.strokePath();
+
+    // Slit windows
+    g.fillStyle(0x111111, 1);
+    if (damageLevel < 2) {
+      g.fillRect(20, baseY - 80, 16, 5);
+      g.fillRect(64, baseY - 80, 16, 5);
+    } else {
+      // One window missing in heavy damage
+      g.fillRect(20, baseY - 80, 16, 5);
+    }
+    g.fillRect(42, baseY - 60, 16, 5);
+
+    // Door
+    g.fillStyle(0x111111, 1);
+    g.fillRect(38, baseY - 40, 24, 40);
+    // Door frame
+    g.lineStyle(2, lighterColor, 0.6);
+    g.strokeRect(38, baseY - 40, 24, 40);
+
+    // Concrete texture
+    g.lineStyle(1, darkerColor, 0.3);
+    g.beginPath();
+    g.moveTo(10, baseY - 50);
+    g.lineTo(90, baseY - 50);
+    g.strokePath();
+    g.beginPath();
+    g.moveTo(10, baseY - 25);
+    g.lineTo(38, baseY - 25);
+    g.strokePath();
+    g.beginPath();
+    g.moveTo(62, baseY - 25);
+    g.lineTo(90, baseY - 25);
+    g.strokePath();
+
+    if (damageLevel >= 1) {
+      // Cracks in walls
+      g.lineStyle(2, 0x222222, 0.7);
+      g.beginPath();
+      g.moveTo(75, baseY - 95);
+      g.lineTo(70, baseY - 80);
+      g.lineTo(78, baseY - 65);
+      g.strokePath();
+
+      // Cracked roof edge
+      g.lineStyle(1, 0x222222, 0.5);
+      g.beginPath();
+      g.moveTo(5, baseY - 100);
+      g.lineTo(12, baseY - 97);
+      g.strokePath();
+    }
+
+    if (damageLevel >= 2) {
+      // Heavy cracks
+      g.lineStyle(2, 0x222222, 0.8);
+      g.beginPath();
+      g.moveTo(20, baseY - 90);
+      g.lineTo(25, baseY - 70);
+      g.lineTo(18, baseY - 55);
+      g.strokePath();
+      // Debris
+      g.fillStyle(darkerColor, 0.8);
+      g.fillCircle(8, baseY - 3, 4);
+      g.fillCircle(92, baseY - 4, 3);
+      g.fillRect(85, baseY - 6, 6, 4);
+      // Smoke
+      g.fillStyle(0x666666, 0.3);
+      g.fillCircle(70, baseY - 128, 5);
+      g.fillCircle(68, baseY - 135, 4);
+    }
+  }
+
+  drawScifiBase(g, w, h, color, damageLevel) {
+    const baseY = h;
+    const darkerColor = Phaser.Display.Color.ValueToColor(color).darken(20).color;
+    const lighterColor = Phaser.Display.Color.ValueToColor(color).lighten(20).color;
+    const glowColor = Phaser.Display.Color.ValueToColor(color).lighten(40).color;
+
+    // Trapezoidal main structure
+    g.fillStyle(darkerColor, 1);
+    g.beginPath();
+    g.moveTo(10, baseY);
+    g.lineTo(20, baseY - 110);
+    g.lineTo(80, baseY - 110);
+    g.lineTo(90, baseY);
+    g.closePath();
+    g.fillPath();
+
+    // Inner panel
+    g.fillStyle(color, 1);
+    g.beginPath();
+    g.moveTo(15, baseY - 5);
+    g.lineTo(24, baseY - 105);
+    g.lineTo(76, baseY - 105);
+    g.lineTo(85, baseY - 5);
+    g.closePath();
+    g.fillPath();
+
+    // Antenna dish on top
+    g.lineStyle(2, lighterColor, 0.8);
+    g.beginPath();
+    g.moveTo(50, baseY - 110);
+    g.lineTo(50, baseY - 130);
+    g.strokePath();
+    g.lineStyle(1, lighterColor, 0.6);
+    g.beginPath();
+    g.arc(50, baseY - 128, 8, Math.PI * 1.1, Math.PI * 1.9, false);
+    g.strokePath();
+
+    // Glowing accent lines
+    const glowAlpha = damageLevel >= 2 ? 0.3 : 0.8;
+    g.lineStyle(2, glowColor, glowAlpha);
+
+    // Horizontal accent lines
+    g.beginPath();
+    g.moveTo(22, baseY - 90);
+    g.lineTo(78, baseY - 90);
+    g.strokePath();
+    g.beginPath();
+    g.moveTo(18, baseY - 50);
+    g.lineTo(82, baseY - 50);
+    g.strokePath();
+
+    // Vertical accent lines on edges
+    if (damageLevel < 2) {
+      g.beginPath();
+      g.moveTo(25, baseY - 100);
+      g.lineTo(16, baseY - 10);
+      g.strokePath();
+      g.beginPath();
+      g.moveTo(75, baseY - 100);
+      g.lineTo(84, baseY - 10);
+      g.strokePath();
+    } else {
+      // Broken/dashed lines for heavy damage
+      g.beginPath();
+      g.moveTo(25, baseY - 100);
+      g.lineTo(20, baseY - 70);
+      g.strokePath();
+      g.beginPath();
+      g.moveTo(18, baseY - 40);
+      g.lineTo(16, baseY - 10);
+      g.strokePath();
+    }
+
+    // Door opening
+    g.fillStyle(0x112233, 1);
+    g.fillRect(38, baseY - 40, 24, 40);
+    // Door glow frame
+    g.lineStyle(1, glowColor, glowAlpha);
+    g.strokeRect(38, baseY - 40, 24, 40);
+
+    // Window slits with glow
+    g.fillStyle(glowColor, glowAlpha * 0.6);
+    g.fillRect(28, baseY - 80, 12, 4);
+    g.fillRect(60, baseY - 80, 12, 4);
+
+    if (damageLevel >= 1) {
+      // Broken panel
+      g.lineStyle(2, 0x222222, 0.7);
+      g.beginPath();
+      g.moveTo(65, baseY - 100);
+      g.lineTo(70, baseY - 85);
+      g.lineTo(62, baseY - 70);
+      g.strokePath();
+      // Exposed inner panel
+      g.fillStyle(0x112233, 0.5);
+      g.fillTriangle(65, baseY - 100, 72, baseY - 85, 60, baseY - 75);
+    }
+
+    if (damageLevel >= 2) {
+      // More broken panels
+      g.lineStyle(2, 0x222222, 0.8);
+      g.beginPath();
+      g.moveTo(30, baseY - 95);
+      g.lineTo(35, baseY - 75);
+      g.lineTo(28, baseY - 60);
+      g.strokePath();
+      // Sparks / electrical accents
+      g.fillStyle(glowColor, 0.6);
+      g.fillCircle(68, baseY - 88, 2);
+      g.fillCircle(32, baseY - 78, 2);
+      // Debris
+      g.fillStyle(darkerColor, 0.7);
+      g.fillCircle(8, baseY - 3, 4);
+      g.fillCircle(93, baseY - 4, 3);
+    }
   }
 
   // ── Parallax background ───────────────────────────────────
@@ -1211,6 +1669,20 @@ export class GameScene extends Phaser.Scene {
       this.minimapGfx.fillStyle(this.ageConfig.baseColors.enemy, 1);
       this.minimapGfx.fillCircle(dotX, mm.y + mm.h / 2, 2);
     });
+
+    // ── Base damage stage transitions ─────────────────────────
+    const pStage = this.playerBaseHP > this.maxPlayerBaseHP * 0.66 ? 0
+                 : this.playerBaseHP > this.maxPlayerBaseHP * 0.33 ? 1 : 2;
+    if (pStage !== this.playerBaseStage) {
+      this.playerBaseStage = pStage;
+      this.playerBase.setTexture(`base_player_${pStage}`);
+    }
+    const eStage = this.enemyBaseHP > this.maxEnemyBaseHP * 0.66 ? 0
+                 : this.enemyBaseHP > this.maxEnemyBaseHP * 0.33 ? 1 : 2;
+    if (eStage !== this.enemyBaseStage) {
+      this.enemyBaseStage = eStage;
+      this.enemyBase.setTexture(`base_enemy_${eStage}`);
+    }
   }
 
   // ── Helpers ─────────────────────────────────────────────────
