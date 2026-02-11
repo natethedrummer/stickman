@@ -52,6 +52,7 @@ This is also the first project Teddy and Nathan ever built using [Claude Code CL
 
 - **v1** — Initial game with basic mechanics, single unit type, colored rectangles
 - **v2** — 4 unit types with procedural stickman sprites, scrollable arena, enemy AI with gold budget, background music with mute toggle, kill rewards
+- **v3** (planned) — [14 new features planned](docs/IMPLEMENTATION_GUIDE.md) including age progression, animations, sound effects, difficulty levels, and more. See [Game V3 Ideas](docs/create_issues/game-v3-ideas.md) for details.
 
 ## Tech stack
 
