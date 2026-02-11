@@ -102,7 +102,7 @@ export class TutorialScene extends Phaser.Scene {
       const playText = this.add.text(cx + 120, btnY, 'Got it!', {
         fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
       }).setOrigin(0.5);
-      playBg.on('pointerdown', () => this.scene.start('MenuScene'));
+      playBg.on('pointerdown', () => this.scene.start('LevelSelectScene'));
       this.elements.push(playBg, playText);
     }
 
@@ -110,7 +110,7 @@ export class TutorialScene extends Phaser.Scene {
     const skip = this.add.text(cx, 520, 'Skip tutorial', {
       fontSize: '14px', color: '#666666',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    skip.on('pointerdown', () => this.scene.start('MenuScene'));
+    skip.on('pointerdown', () => this.scene.start('LevelSelectScene'));
     this.elements.push(skip);
   }
 

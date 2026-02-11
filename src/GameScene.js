@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { SoundFX } from './SoundFX.js';
 import { DIFFICULTIES } from './MenuScene.js';
+import { AGES } from './AgesConfig.js';
+import { loadProgress, saveProgress } from './LevelSelectScene.js';
 
 const GROUND_Y = 500;
 const GAME_W = 3072;
@@ -45,20 +47,43 @@ export class GameScene extends Phaser.Scene {
     const diffKey = (data && data.difficulty) || 'medium';
     this.difficulty = DIFFICULTIES[diffKey] || DIFFICULTIES.medium;
 
+    // ── Age config ──────────────────────────────────────────
+    this.ageIndex = (data && data.ageIndex != null) ? data.ageIndex : 0;
+    this.ageConfig = AGES[this.ageIndex] || AGES[0];
+
+    // Build unitTypes from base UNIT_TYPES + age overrides
+    const ageUnits = this.ageConfig.units;
+    this.unitTypes = UNIT_TYPES.map((base) => {
+      const ageUnit = ageUnits[base.name] || {};
+      return {
+        ...base,
+        displayName: ageUnit.displayName || base.name,
+        color: ageUnit.playerColor || base.color,
+        enemyColor: ageUnit.enemyColor || 0xff4444,
+        hp: Math.round(base.hp * this.ageConfig.statMult),
+        damage: Math.round(base.damage * this.ageConfig.statMult),
+      };
+    });
+
+    // Base HP from age config
+    this.maxPlayerBaseHP = BASE_HP;
+    this.maxEnemyBaseHP = this.ageConfig.enemyBaseHP;
+
+    this.cleanupTextures();
     this.generateStickmanTextures();
     this.drawBackground();
 
     // ── Ground ──────────────────────────────────────────────
-    const ground = this.add.rectangle(GAME_W / 2, GROUND_Y + 40, GAME_W, 80, 0x3d8b37).setDepth(5);
+    const ground = this.add.rectangle(GAME_W / 2, GROUND_Y + 40, GAME_W, 80, this.ageConfig.background.groundColor).setDepth(5);
     this.physics.add.existing(ground, true); // static body
     this.ground = ground;
 
     // ── Bases ───────────────────────────────────────────────
-    this.playerBaseHP = BASE_HP;
-    this.enemyBaseHP = BASE_HP;
+    this.playerBaseHP = this.maxPlayerBaseHP;
+    this.enemyBaseHP = this.maxEnemyBaseHP;
 
     // Player base (left)
-    this.playerBase = this.add.rectangle(60, GROUND_Y - 60, 80, 120, 0x4444cc).setDepth(10);
+    this.playerBase = this.add.rectangle(60, GROUND_Y - 60, 80, 120, this.ageConfig.baseColors.player).setDepth(10);
     this.playerBase.faction = 'player';
     this.playerBase.unitHeight = 120;
     this.physics.add.existing(this.playerBase, true);
@@ -70,7 +95,7 @@ export class GameScene extends Phaser.Scene {
     }).setDepth(10);
 
     // Enemy base (right)
-    this.enemyBase = this.add.rectangle(GAME_W - 60, GROUND_Y - 60, 80, 120, 0xcc4444).setDepth(10);
+    this.enemyBase = this.add.rectangle(GAME_W - 60, GROUND_Y - 60, 80, 120, this.ageConfig.baseColors.enemy).setDepth(10);
     this.enemyBase.faction = 'enemy';
     this.enemyBase.unitHeight = 120;
     this.physics.add.existing(this.enemyBase, true);
@@ -102,10 +127,10 @@ export class GameScene extends Phaser.Scene {
     const btnStartX = 130;
     const btnW = 160;
     const btnGap = 8;
-    UNIT_TYPES.forEach((type, i) => {
+    this.unitTypes.forEach((type, i) => {
       const x = btnStartX + i * (btnW + btnGap);
       const btn = this.add.rectangle(x, 20, btnW, 36, 0x226622, 0.9).setOrigin(0, 0).setScrollFactor(0).setDepth(20);
-      const label = this.add.text(x + 8, 26, `${type.name} (${type.cost}g)`, {
+      const label = this.add.text(x + 8, 26, `${type.displayName} (${type.cost}g)`, {
         fontSize: '14px', color: '#ffffff',
       }).setScrollFactor(0).setDepth(20);
       btn.setInteractive({ useHandCursor: true });
@@ -160,9 +185,9 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
     shopBtnBg.on('pointerdown', () => this.toggleShop());
 
-    // ── Difficulty label (HUD) ────────────────────────────────
-    this.add.text(1024 - 80, 48, this.difficulty.label, {
-      fontSize: '14px', color: '#ffffff',
+    // ── Age name + Difficulty label (HUD) ────────────────────
+    this.add.text(1024 - 80, 48, `${this.ageConfig.name} - ${this.difficulty.label}`, {
+      fontSize: '13px', color: '#ffffff',
       stroke: '#000000', strokeThickness: 2,
     }).setScrollFactor(0).setDepth(20).setOrigin(0.5, 0);
 
@@ -209,12 +234,12 @@ export class GameScene extends Phaser.Scene {
     const vpW = (1024 / GAME_W) * mmW;
     this.minimapVP = this.add.rectangle(mmX + vpW / 2, mmY + mmH / 2, vpW, mmH - 2, 0xffffff, 0.3)
       .setScrollFactor(0).setDepth(21);
-    // Base markers
+    // Base markers — use age colors
     const basePlayerX = mmX + (60 / GAME_W) * mmW;
     const baseEnemyX = mmX + ((GAME_W - 60) / GAME_W) * mmW;
-    this.add.rectangle(basePlayerX, mmY + mmH / 2, 4, mmH - 4, 0x4444cc)
+    this.add.rectangle(basePlayerX, mmY + mmH / 2, 4, mmH - 4, this.ageConfig.baseColors.player)
       .setScrollFactor(0).setDepth(22);
-    this.add.rectangle(baseEnemyX, mmY + mmH / 2, 4, mmH - 4, 0xcc4444)
+    this.add.rectangle(baseEnemyX, mmY + mmH / 2, 4, mmH - 4, this.ageConfig.baseColors.enemy)
       .setScrollFactor(0).setDepth(22);
     // Graphics layer for unit dots
     this.minimapGfx = this.add.graphics().setScrollFactor(0).setDepth(22);
@@ -246,6 +271,31 @@ export class GameScene extends Phaser.Scene {
     }).setScrollFactor(0).setDepth(20);
   }
 
+  // ── Cleanup textures/anims for age switching ────────────────
+  cleanupTextures() {
+    const poses = ['idle', 'walk_0', 'walk_1', 'attack_0', 'attack_1'];
+    UNIT_TYPES.forEach((type) => {
+      ['player', 'enemy'].forEach((faction) => {
+        // Remove animations
+        const walkKey = animKey(type.name, faction, 'walk');
+        const attackKey = animKey(type.name, faction, 'attack');
+        if (this.anims.exists(walkKey)) this.anims.remove(walkKey);
+        if (this.anims.exists(attackKey)) this.anims.remove(attackKey);
+
+        // Remove textures
+        poses.forEach((pose) => {
+          const key = textureKey(type.name, faction, pose);
+          if (this.textures.exists(key)) this.textures.remove(key);
+        });
+      });
+    });
+
+    // Remove background textures
+    ['bg_sky', 'bg_clouds', 'bg_far_mtn', 'bg_near_mtn', 'bg_trees', 'shield_icon', 'rain_drop', 'snowflake'].forEach((key) => {
+      if (this.textures.exists(key)) this.textures.remove(key);
+    });
+  }
+
   // ── Texture generation ─────────────────────────────────────
   generateStickmanTextures() {
     const drawFns = {
@@ -257,13 +307,13 @@ export class GameScene extends Phaser.Scene {
 
     const poses = ['idle', 'walk_0', 'walk_1', 'attack_0', 'attack_1'];
 
-    UNIT_TYPES.forEach((type) => {
+    this.unitTypes.forEach((type) => {
       const texW = type.width + 16;
       const texH = type.height + 4;
 
       [
         { faction: 'player', color: type.color },
-        { faction: 'enemy', color: 0xff4444 },
+        { faction: 'enemy', color: type.enemyColor },
       ].forEach(({ faction, color }) => {
         const drawFn = drawFns[type.name];
         if (!drawFn) return;
@@ -289,7 +339,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   createAnimations() {
-    UNIT_TYPES.forEach((type) => {
+    this.unitTypes.forEach((type) => {
       ['player', 'enemy'].forEach((faction) => {
         // Walk animation — 2 frames at 4 fps
         this.anims.create({
@@ -319,7 +369,7 @@ export class GameScene extends Phaser.Scene {
   // ── Parallax background ───────────────────────────────────
   drawBackground() {
     const viewW = 1024;
-    const viewH = 576;
+    const bg = this.ageConfig.background;
 
     // Layer 1 — Sky gradient (scrollFactor 0, fixed)
     const skyG = this.add.graphics();
@@ -327,10 +377,9 @@ export class GameScene extends Phaser.Scene {
     const bandH = GROUND_Y / bands;
     for (let i = 0; i < bands; i++) {
       const t = i / (bands - 1);
-      // Lerp from light blue (top) to pale white-blue (horizon)
-      const r = Math.round(135 + (230 - 135) * t);
-      const g = Math.round(206 + (240 - 206) * t);
-      const b = Math.round(235 + (255 - 235) * t);
+      const r = Math.round(bg.skyTopR + (bg.skyBotR - bg.skyTopR) * t);
+      const g = Math.round(bg.skyTopG + (bg.skyBotG - bg.skyTopG) * t);
+      const b = Math.round(bg.skyTopB + (bg.skyBotB - bg.skyTopB) * t);
       const color = (r << 16) | (g << 8) | b;
       skyG.fillStyle(color, 1);
       skyG.fillRect(0, i * bandH, viewW, bandH + 1);
@@ -351,12 +400,12 @@ export class GameScene extends Phaser.Scene {
       { x: 200, y: 110, s: 0.6 },
     ];
     clouds.forEach((c) => {
-      cloudG.fillStyle(0xffffff, 0.6);
+      cloudG.fillStyle(bg.cloudColor, bg.cloudAlpha);
       cloudG.fillCircle(c.x, c.y, 24 * c.s);
       cloudG.fillCircle(c.x + 20 * c.s, c.y - 5, 20 * c.s);
       cloudG.fillCircle(c.x - 18 * c.s, c.y + 2, 18 * c.s);
       cloudG.fillCircle(c.x + 10 * c.s, c.y + 8, 16 * c.s);
-      cloudG.fillStyle(0xeeeeee, 0.4);
+      cloudG.fillStyle(bg.cloudColor, bg.cloudAlpha * 0.7);
       cloudG.fillCircle(c.x + 30 * c.s, c.y + 4, 14 * c.s);
       cloudG.fillCircle(c.x - 28 * c.s, c.y + 6, 12 * c.s);
     });
@@ -364,10 +413,10 @@ export class GameScene extends Phaser.Scene {
     cloudG.destroy();
     this.add.image(cloudW / 2, 75, 'bg_clouds').setScrollFactor(0.1).setDepth(1);
 
-    // Layer 3 — Far mountains (scrollFactor 0.2, blue-grey)
+    // Layer 3 — Far mountains (scrollFactor 0.2)
     const farMtnW = Math.ceil(viewW + (GAME_W - viewW) * 0.2);
     const farG = this.add.graphics();
-    farG.fillStyle(0x7090aa, 1);
+    farG.fillStyle(bg.farMtnColor, 1);
     const farPeaks = [
       [0, GROUND_Y, 100, GROUND_Y - 160, 250, GROUND_Y],
       [200, GROUND_Y, 350, GROUND_Y - 200, 520, GROUND_Y],
@@ -381,7 +430,7 @@ export class GameScene extends Phaser.Scene {
       farG.fillTriangle(x1, y1, x2, y2, x3, y3);
     });
     // Snow caps on taller peaks
-    farG.fillStyle(0xddeeff, 0.7);
+    farG.fillStyle(bg.snowCapColor, 0.7);
     farPeaks.forEach(([x1, y1, x2, y2, x3, y3]) => {
       const peakH = y1 - y2;
       if (peakH > 150) {
@@ -394,10 +443,10 @@ export class GameScene extends Phaser.Scene {
     farG.destroy();
     this.add.image(farMtnW / 2, GROUND_Y / 2, 'bg_far_mtn').setScrollFactor(0.2).setDepth(2);
 
-    // Layer 4 — Near mountains (scrollFactor 0.4, darker)
+    // Layer 4 — Near mountains (scrollFactor 0.4)
     const nearMtnW = Math.ceil(viewW + (GAME_W - viewW) * 0.4);
     const nearG = this.add.graphics();
-    nearG.fillStyle(0x506848, 1);
+    nearG.fillStyle(bg.nearMtnColor, 1);
     const nearPeaks = [
       [0, GROUND_Y, 80, GROUND_Y - 100, 200, GROUND_Y],
       [150, GROUND_Y, 300, GROUND_Y - 130, 430, GROUND_Y],
@@ -428,10 +477,10 @@ export class GameScene extends Phaser.Scene {
       const trunkH = 10 + Math.random() * 8;
       const baseY = GROUND_Y;
       // Trunk
-      treeG.fillStyle(0x5a3a1a, 1);
+      treeG.fillStyle(bg.trunkColor, 1);
       treeG.fillRect(tx - 2, baseY - trunkH, 4, trunkH);
       // Canopy (triangle)
-      treeG.fillStyle(0x2d5a1e, 1);
+      treeG.fillStyle(bg.canopyColor, 1);
       treeG.fillTriangle(
         tx - 10 - Math.random() * 5, baseY - trunkH,
         tx, baseY - trunkH - treeH,
@@ -904,7 +953,7 @@ export class GameScene extends Phaser.Scene {
   spawnEnemy() {
     if (this.gameOver) return;
 
-    const affordable = UNIT_TYPES.filter((t) => t.cost <= this.enemyGold);
+    const affordable = this.unitTypes.filter((t) => t.cost <= this.enemyGold);
     if (affordable.length === 0) return;
 
     const type = Phaser.Utils.Array.GetRandom(affordable);
@@ -1409,8 +1458,8 @@ export class GameScene extends Phaser.Scene {
     this.sfx.healEffect();
     this.cameras.main.flash(300, 100, 255, 100);
 
-    const healed = Math.min(100, BASE_HP - this.playerBaseHP);
-    this.playerBaseHP = Math.min(BASE_HP, this.playerBaseHP + 100);
+    const healed = Math.min(100, this.maxPlayerBaseHP - this.playerBaseHP);
+    this.playerBaseHP = Math.min(this.maxPlayerBaseHP, this.playerBaseHP + 100);
     this.playerHPText.setText(`HP: ${Math.ceil(this.playerBaseHP)}`);
     if (healed > 0) {
       this.showDamageNumber(this.playerBase.x, this.playerBase.y - 60, healed, '#44ff44');
@@ -1470,16 +1519,32 @@ export class GameScene extends Phaser.Scene {
       e.setTexture(textureKey(e.unitTypeName, e.faction, 'idle'));
     });
 
-    this.add.text(512, 200, message, {
-      fontSize: '48px',
-      color: message === 'You Win!' ? '#00ff00' : '#ff0000',
-      fontStyle: 'bold',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+    // Save progress on win
+    if (message === 'You Win!') {
+      const progress = loadProgress();
+      const newUnlocked = Math.max(progress.unlockedAge, this.ageIndex + 1);
+      saveProgress({ unlockedAge: Math.min(newUnlocked, AGES.length - 1) });
 
-    this.add.text(512, 260, 'Click to return to menu', {
+      this.add.text(512, 200, 'Age Complete!', {
+        fontSize: '48px', color: '#00ff00', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 4,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+
+      if (this.ageIndex + 1 < AGES.length) {
+        this.add.text(512, 250, `${AGES[this.ageIndex + 1].name} Unlocked!`, {
+          fontSize: '24px', color: '#ffd700', fontStyle: 'bold',
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+      }
+    } else {
+      this.add.text(512, 200, message, {
+        fontSize: '48px', color: '#ff0000', fontStyle: 'bold',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+    }
+
+    this.add.text(512, 300, 'Click to continue', {
       fontSize: '20px', color: '#ffffff',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
 
-    this.input.once('pointerdown', () => this.scene.start('MenuScene'));
+    this.input.once('pointerdown', () => this.scene.start('LevelSelectScene'));
   }
 }

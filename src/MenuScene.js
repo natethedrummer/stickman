@@ -18,64 +18,30 @@ export class MenuScene extends Phaser.Scene {
     const cx = 512;
 
     // Title
-    this.add.text(cx, 120, 'STICKMAN WARS', {
+    this.add.text(cx, 140, 'STICKMAN WARS', {
       fontSize: '52px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5);
 
-    this.add.text(cx, 180, 'Select Difficulty', {
-      fontSize: '22px', color: '#cccccc',
+    this.add.text(cx, 200, 'Battle through the ages!', {
+      fontSize: '20px', color: '#cccccc',
     }).setOrigin(0.5);
 
-    // Difficulty buttons
-    const keys = Object.keys(DIFFICULTIES);
-    const btnW = 180;
-    const btnH = 50;
-    const gap = 16;
-    const totalW = keys.length * btnW + (keys.length - 1) * gap;
-    const startX = cx - totalW / 2;
-    const btnY = 280;
-
-    keys.forEach((key, i) => {
-      const diff = DIFFICULTIES[key];
-      const x = startX + i * (btnW + gap) + btnW / 2;
-
-      const btn = this.add.rectangle(x, btnY, btnW, btnH, diff.color, 0.85)
-        .setInteractive({ useHandCursor: true });
-
-      this.add.text(x, btnY, diff.label, {
-        fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
-        stroke: '#000000', strokeThickness: 2,
-      }).setOrigin(0.5);
-
-      btn.on('pointerover', () => btn.setAlpha(1));
-      btn.on('pointerout', () => btn.setAlpha(0.85));
-
-      btn.on('pointerdown', () => {
-        this.scene.start('GameScene', { difficulty: key });
-      });
-    });
-
-    // Description text for each difficulty
-    const descY = 340;
-    const descriptions = [
-      'More gold, weaker enemies',
-      'Balanced experience',
-      'Less gold, tougher enemies',
-      'Brutal challenge!',
-    ];
-    keys.forEach((key, i) => {
-      const diff = DIFFICULTIES[key];
-      const x = startX + i * (btnW + gap) + btnW / 2;
-      this.add.text(x, descY, descriptions[i], {
-        fontSize: '12px', color: '#aaaaaa',
-      }).setOrigin(0.5);
-    });
+    // Play button
+    const playBtn = this.add.rectangle(cx, 300, 220, 60, 0x228822, 0.9)
+      .setInteractive({ useHandCursor: true });
+    this.add.text(cx, 300, 'PLAY', {
+      fontSize: '28px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5);
+    playBtn.on('pointerover', () => playBtn.setAlpha(1));
+    playBtn.on('pointerout', () => playBtn.setAlpha(0.9));
+    playBtn.on('pointerdown', () => this.scene.start('LevelSelectScene'));
 
     // How to Play button
-    const tutBtn = this.add.rectangle(cx, 400, 180, 44, 0x336699, 0.9)
+    const tutBtn = this.add.rectangle(cx, 380, 180, 44, 0x336699, 0.9)
       .setInteractive({ useHandCursor: true });
-    this.add.text(cx, 400, 'How to Play', {
+    this.add.text(cx, 380, 'How to Play', {
       fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
     }).setOrigin(0.5);
     tutBtn.on('pointerover', () => tutBtn.setAlpha(1));
