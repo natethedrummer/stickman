@@ -8,6 +8,7 @@ export const AGES = [
       Warrior:  { displayName: 'Clubber',  playerColor: 0x7a5c2e, enemyColor: 0xcc4444 },
       Spearman: { displayName: 'Spearman', playerColor: 0xa07030, enemyColor: 0xcc4444 },
       Giant:    { displayName: 'Brute',    playerColor: 0x6b4226, enemyColor: 0xcc4444 },
+      Bird:     { displayName: 'Pterodactyl', playerColor: 0x8a7a50, enemyColor: 0xcc4444 },
     },
     background: {
       skyTopR: 160, skyTopG: 170, skyTopB: 150,
@@ -32,6 +33,7 @@ export const AGES = [
       Warrior:  { displayName: 'Knight',  playerColor: 0x3399ff, enemyColor: 0xff4444 },
       Spearman: { displayName: 'Lancer',  playerColor: 0xff8800, enemyColor: 0xff4444 },
       Giant:    { displayName: 'Giant',   playerColor: 0x9933ff, enemyColor: 0xff4444 },
+      Bird:     { displayName: 'Falcon',  playerColor: 0xccaa44, enemyColor: 0xff4444 },
     },
     background: {
       skyTopR: 135, skyTopG: 206, skyTopB: 235,
@@ -56,6 +58,7 @@ export const AGES = [
       Warrior:  { displayName: 'Soldier', playerColor: 0x5a6a5a, enemyColor: 0x884444 },
       Spearman: { displayName: 'Marine',  playerColor: 0x6a7a3a, enemyColor: 0x884444 },
       Giant:    { displayName: 'Tank',    playerColor: 0x3a5a3a, enemyColor: 0x884444 },
+      Bird:     { displayName: 'Drone',   playerColor: 0x5a7a5a, enemyColor: 0x884444 },
     },
     background: {
       skyTopR: 140, skyTopG: 150, skyTopB: 160,
@@ -80,6 +83,7 @@ export const AGES = [
       Warrior:  { displayName: 'Cyborg',  playerColor: 0x3366ff, enemyColor: 0xff3366 },
       Spearman: { displayName: 'Striker', playerColor: 0x00ff99, enemyColor: 0xff3366 },
       Giant:    { displayName: 'Mech',    playerColor: 0x9933ff, enemyColor: 0xff3366 },
+      Bird:     { displayName: 'Phoenix', playerColor: 0xff6600, enemyColor: 0xff3366 },
     },
     background: {
       skyTopR: 20, skyTopG: 10, skyTopB: 40,

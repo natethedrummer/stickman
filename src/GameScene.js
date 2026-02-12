@@ -12,6 +12,7 @@ const UNIT_TYPES = [
   { name: 'Warrior',  cost: 50,  hp: 50,  damage: 10, speed: 50, width: 24, height: 40, color: 0x3399ff, blockReduction: 0.5, blockDuration: 1.5, blockCooldown: 3 },
   { name: 'Spearman', cost: 75,  hp: 65,  damage: 12, speed: 60, width: 20, height: 44, color: 0xff8800, blockReduction: 0,   blockDuration: 0,   blockCooldown: 0 },
   { name: 'Giant',    cost: 150, hp: 150, damage: 20, speed: 30, width: 36, height: 52, color: 0x9933ff, blockReduction: 0.6, blockDuration: 2,   blockCooldown: 4 },
+  { name: 'Bird',     cost: 200, hp: 80,  damage: 25, speed: 90, width: 28, height: 28, color: 0xccaa44, blockReduction: 0,   blockDuration: 0,   blockCooldown: 0 },
 ];
 
 const ABILITIES = [
@@ -64,6 +65,12 @@ export class GameScene extends Phaser.Scene {
         damage: Math.round(base.damage * this.ageConfig.statMult),
       };
     });
+
+    // Conditionally include Bird (only if unlocked)
+    this.birdUnlocked = !!loadProgress().birdUnlocked;
+    if (!this.birdUnlocked) {
+      this.unitTypes = this.unitTypes.filter((t) => t.name !== 'Bird');
+    }
 
     // Base HP from age config
     this.maxPlayerBaseHP = BASE_HP;
@@ -144,7 +151,8 @@ export class GameScene extends Phaser.Scene {
     const btnGap = 8;
     this.unitTypes.forEach((type, i) => {
       const x = btnStartX + i * (btnW + btnGap);
-      const btn = this.add.rectangle(x, 20, btnW, 36, 0x226622, 0.9).setOrigin(0, 0).setScrollFactor(0).setDepth(20);
+      const btnColor = type.name === 'Bird' ? 0x886600 : 0x226622;
+      const btn = this.add.rectangle(x, 20, btnW, 36, btnColor, 0.9).setOrigin(0, 0).setScrollFactor(0).setDepth(20);
       const label = this.add.text(x + 8, 26, `${type.displayName} (${type.cost}g)`, {
         fontSize: '14px', color: '#ffffff',
       }).setScrollFactor(0).setDepth(20);
@@ -347,6 +355,7 @@ export class GameScene extends Phaser.Scene {
       Warrior: this.drawWarrior,
       Spearman: this.drawSpearman,
       Giant: this.drawGiant,
+      Bird: this.drawBird,
     };
 
     const poses = ['idle', 'walk_0', 'walk_1', 'attack_0', 'attack_1'];
@@ -1387,6 +1396,90 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  drawBird(g, w, h, color, pose = 'idle') {
+    const cx = w / 2;
+    const headR = 4;
+    const headY = 6 + headR;
+    const bodyStartY = headY + headR;
+    const bodyEndY = h - 8;
+    const wingY = bodyStartY + 4;
+
+    // Head
+    g.fillStyle(color, 1);
+    g.fillCircle(cx, headY, headR);
+    // Beak
+    g.fillStyle(0xffaa00, 1);
+    g.fillTriangle(cx + headR, headY - 1, cx + headR, headY + 2, cx + headR + 5, headY + 1);
+
+    // Body (short, compact)
+    g.lineStyle(3, color, 1);
+    g.beginPath();
+    g.moveTo(cx, bodyStartY);
+    g.lineTo(cx, bodyEndY);
+    g.strokePath();
+
+    // Wings (V-shape, pose-dependent)
+    g.lineStyle(2, color, 1);
+    if (pose === 'walk_0') {
+      // Wings up
+      g.beginPath();
+      g.moveTo(cx - 12, wingY - 6);
+      g.lineTo(cx, wingY);
+      g.lineTo(cx + 12, wingY - 6);
+      g.strokePath();
+    } else if (pose === 'walk_1') {
+      // Wings down
+      g.beginPath();
+      g.moveTo(cx - 12, wingY + 6);
+      g.lineTo(cx, wingY);
+      g.lineTo(cx + 12, wingY + 6);
+      g.strokePath();
+    } else if (pose === 'attack_0') {
+      // Wings swept forward
+      g.beginPath();
+      g.moveTo(cx - 10, wingY - 4);
+      g.lineTo(cx, wingY);
+      g.lineTo(cx + 14, wingY - 2);
+      g.strokePath();
+    } else if (pose === 'attack_1') {
+      // Diving posture — wings back
+      g.beginPath();
+      g.moveTo(cx - 14, wingY + 4);
+      g.lineTo(cx, wingY);
+      g.lineTo(cx + 14, wingY + 4);
+      g.strokePath();
+    } else {
+      // Idle — wings spread level
+      g.beginPath();
+      g.moveTo(cx - 12, wingY);
+      g.lineTo(cx, wingY);
+      g.lineTo(cx + 12, wingY);
+      g.strokePath();
+    }
+
+    // Tail feathers
+    g.lineStyle(2, color, 0.8);
+    g.beginPath();
+    g.moveTo(cx, bodyEndY);
+    g.lineTo(cx - 5, bodyEndY + 4);
+    g.strokePath();
+    g.beginPath();
+    g.moveTo(cx, bodyEndY);
+    g.lineTo(cx + 5, bodyEndY + 4);
+    g.strokePath();
+
+    // Tiny tucked legs
+    g.lineStyle(1, color, 0.6);
+    g.beginPath();
+    g.moveTo(cx - 2, bodyEndY);
+    g.lineTo(cx - 3, bodyEndY + 6);
+    g.strokePath();
+    g.beginPath();
+    g.moveTo(cx + 2, bodyEndY);
+    g.lineTo(cx + 3, bodyEndY + 6);
+    g.strokePath();
+  }
+
   // ── Spawning ────────────────────────────────────────────────
   spawnUnit(type) {
     if (this.gameOver) return;
@@ -1395,11 +1488,13 @@ export class GameScene extends Phaser.Scene {
     this.sfx.playerSpawn();
     this.updateGoldText();
 
-    const w = this.add.sprite(100, GROUND_Y - type.height / 2, textureKey(type.name, 'player', 'idle')).setDepth(10);
+    const spawnY = type.name === 'Bird' ? GROUND_Y - type.height / 2 - 20 : GROUND_Y - type.height / 2;
+    const w = this.add.sprite(100, spawnY, textureKey(type.name, 'player', 'idle')).setDepth(10);
     this.physics.add.existing(w);
     w.body.setSize(type.width, type.height);
     w.body.setOffset(8, 4);
     w.body.setCollideWorldBounds(true);
+    if (type.name === 'Bird') w.body.setAllowGravity(false);
     this.warriors.add(w);
 
     w.hp = type.hp;
@@ -1432,7 +1527,7 @@ export class GameScene extends Phaser.Scene {
   spawnEnemy() {
     if (this.gameOver) return;
 
-    const affordable = this.unitTypes.filter((t) => t.cost <= this.enemyGold);
+    const affordable = this.unitTypes.filter((t) => t.cost <= this.enemyGold && t.name !== 'Bird');
     if (affordable.length === 0) return;
 
     const type = Phaser.Utils.Array.GetRandom(affordable);
@@ -1572,7 +1667,19 @@ export class GameScene extends Phaser.Scene {
         w.attackTarget.hp -= dmg;
         this.accumulateDamage(w.attackTarget, dmg, time);
         if (w.attackTarget.hp <= 0) {
-          this.killUnit(w.attackTarget);
+          const killedTarget = w.attackTarget;
+          this.killUnit(killedTarget);
+          // Bird splash damage: 10 damage to enemies within 60px
+          if (w.unitTypeName === 'Bird') {
+            this.enemies.getChildren().forEach((nearby) => {
+              if (!nearby.active || nearby.dying || nearby === killedTarget) return;
+              if (Math.abs(nearby.x - killedTarget.x) <= 60) {
+                nearby.hp -= 10;
+                this.showDamageNumber(nearby.x, nearby.y - nearby.unitHeight / 2 - 10, '10', '#ffaa00');
+                if (nearby.hp <= 0) this.killUnit(nearby);
+              }
+            });
+          }
           w.attacking = false;
           w.attackTarget = null;
         }
@@ -2016,7 +2123,13 @@ export class GameScene extends Phaser.Scene {
     if (message === 'You Win!') {
       const progress = loadProgress();
       const newUnlocked = Math.max(progress.unlockedAge, this.ageIndex + 1);
-      saveProgress({ unlockedAge: Math.min(newUnlocked, AGES.length - 1) });
+      const newProgress = { unlockedAge: Math.min(newUnlocked, AGES.length - 1), birdUnlocked: progress.birdUnlocked || false };
+
+      // Unlock Bird when beating the final age (Future)
+      if (this.ageIndex === AGES.length - 1 && !newProgress.birdUnlocked) {
+        newProgress.birdUnlocked = true;
+      }
+      saveProgress(newProgress);
 
       this.add.text(512, 200, 'Age Complete!', {
         fontSize: '48px', color: '#00ff00', fontStyle: 'bold',
@@ -2026,6 +2139,15 @@ export class GameScene extends Phaser.Scene {
       if (this.ageIndex + 1 < AGES.length) {
         this.add.text(512, 250, `${AGES[this.ageIndex + 1].name} Unlocked!`, {
           fontSize: '24px', color: '#ffd700', fontStyle: 'bold',
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+      }
+
+      // Bird unlock celebration
+      if (newProgress.birdUnlocked && !this.birdUnlocked) {
+        const birdY = this.ageIndex + 1 < AGES.length ? 290 : 250;
+        this.add.text(512, birdY, 'Bird Unit Unlocked!', {
+          fontSize: '28px', color: '#ffd700', fontStyle: 'bold',
+          stroke: '#000000', strokeThickness: 4,
         }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
       }
     } else {

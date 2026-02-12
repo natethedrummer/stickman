@@ -9,7 +9,7 @@ function loadProgress() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch (e) { /* ignore */ }
-  return { unlockedAge: 0 };
+  return { unlockedAge: 0, birdUnlocked: false };
 }
 
 function saveProgress(data) {
@@ -108,6 +108,14 @@ export class LevelSelectScene extends Phaser.Scene {
         }).setOrigin(0.5);
       }
     });
+
+    // Bird unlock banner
+    if (progress.birdUnlocked) {
+      this.add.text(cx, cardY + cardH / 2 + 20, 'Bird Unit Unlocked!', {
+        fontSize: '18px', color: '#ffd700', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5);
+    }
 
     // Difficulty section (populated on age click)
     this.difficultyY = 320;
