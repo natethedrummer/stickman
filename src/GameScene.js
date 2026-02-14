@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { SoundFX } from './SoundFX.js';
 import { DIFFICULTIES } from './MenuScene.js';
 import { AGES } from './AgesConfig.js';
-import { loadProgress, saveProgress } from './LevelSelectScene.js';
+import { loadProgress, saveProgress, SONGS } from './LevelSelectScene.js';
 
 const GROUND_Y = 500;
 const GAME_W = 3072;
@@ -41,7 +41,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.audio('bgMusic', 'music/bg-music.mp3');
+    SONGS.forEach((song) => {
+      if (!this.cache.audio.exists(song.id)) {
+        this.load.audio(song.id, song.file);
+      }
+    });
   }
 
   create(data) {
@@ -188,7 +192,9 @@ export class GameScene extends Phaser.Scene {
     this.goldText.setScrollFactor(0);
 
     // ── Background music ─────────────────────────────────────
-    this.music = this.sound.add('bgMusic', { loop: true, volume: 0.5 });
+    const progress = loadProgress();
+    const songKey = progress.selectedSong || 'bgMusic';
+    this.music = this.sound.add(songKey, { loop: true, volume: 0.5 });
     this.music.play();
 
     // ── Mute toggle button (top-right, pinned to camera) ────
@@ -2123,7 +2129,7 @@ export class GameScene extends Phaser.Scene {
     if (message === 'You Win!') {
       const progress = loadProgress();
       const newUnlocked = Math.max(progress.unlockedAge, this.ageIndex + 1);
-      const newProgress = { unlockedAge: Math.min(newUnlocked, AGES.length - 1), birdUnlocked: progress.birdUnlocked || false };
+      const newProgress = { ...progress, unlockedAge: Math.min(newUnlocked, AGES.length - 1), birdUnlocked: progress.birdUnlocked || false };
 
       // Unlock Bird when beating the final age (Future)
       if (this.ageIndex === AGES.length - 1 && !newProgress.birdUnlocked) {
