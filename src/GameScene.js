@@ -20,6 +20,9 @@ const ABILITIES = [
   { id: 'healBase',     name: 'Heal Base',      cost: 75,  description: 'Restore 100 HP to base', type: 'instant', cooldown: 20, color: 0x44ff44 },
   { id: 'warDrums',     name: 'War Drums',      cost: 100, description: '+20% unit speed',        type: 'passive', cooldown: 0,  color: 0xff8800 },
   { id: 'goldMine',     name: 'Gold Mine',       cost: 150, description: '2x gold income',        type: 'passive', cooldown: 0,  color: 0xffd700 },
+  { id: 'rallyCry',     name: 'Rally Cry',       cost: 125, description: '+50% unit dmg for 10s',  type: 'instant', cooldown: 25, color: 0xff4488 },
+  { id: 'earthquake',   name: 'Earthquake',      cost: 100, description: 'Slow enemies 50% for 8s', type: 'instant', cooldown: 20, color: 0x886644 },
+  { id: 'fortifyBase',  name: 'Fortify Base',    cost: 200, description: '+200 max base HP & heal', type: 'passive', cooldown: 0,  color: 0x4488ff },
 ];
 
 const WEATHER_TYPES = [
@@ -2541,7 +2544,7 @@ export class GameScene extends Phaser.Scene {
     const panelX = this.twoPlayer ? 256 : 512;
     const panelY = 288;
     const panelW = this.twoPlayer ? 400 : 460;
-    const panelH = 380;
+    const panelH = 540;
     const backdropW = this.twoPlayer ? 512 : 1024;
 
     // Backdrop
@@ -2569,33 +2572,33 @@ export class GameScene extends Phaser.Scene {
 
     // Ability rows
     const rowStartY = panelY - panelH / 2 + 70;
-    const rowH = 70;
+    const rowH = 58;
 
     ABILITIES.forEach((ability, i) => {
       const rowY = rowStartY + i * rowH;
       const leftX = panelX - panelW / 2 + 20;
 
-      const icon = this.add.rectangle(leftX + 15, rowY + 15, 26, 26, ability.color)
+      const icon = this.add.rectangle(leftX + 13, rowY + 13, 22, 22, ability.color)
         .setScrollFactor(0).setDepth(31);
       this[elements].push(icon);
 
-      const nameText = this.add.text(leftX + 38, rowY, ability.name, {
-        fontSize: '15px', color: '#ffffff', fontStyle: 'bold',
+      const nameText = this.add.text(leftX + 34, rowY, ability.name, {
+        fontSize: '14px', color: '#ffffff', fontStyle: 'bold',
       }).setScrollFactor(0).setDepth(31);
       this[elements].push(nameText);
 
-      const descText = this.add.text(leftX + 38, rowY + 20, ability.description, {
-        fontSize: '12px', color: '#aaaaaa',
+      const descText = this.add.text(leftX + 34, rowY + 18, ability.description, {
+        fontSize: '11px', color: '#aaaaaa',
       }).setScrollFactor(0).setDepth(31);
       this[elements].push(descText);
 
-      const costText = this.add.text(leftX + 38, rowY + 38, `${ability.cost}g`, {
-        fontSize: '12px', color: '#FFD700',
+      const costText = this.add.text(leftX + 34, rowY + 32, `${ability.cost}g`, {
+        fontSize: '11px', color: '#FFD700',
       }).setScrollFactor(0).setDepth(31);
       this[elements].push(costText);
 
-      const btnX = panelX + panelW / 2 - 60;
-      const btnY = rowY + 18;
+      const btnX = panelX + panelW / 2 - 55;
+      const btnY = rowY + 15;
 
       let btnLabel = '';
       let btnColor = 0x228822;
@@ -2618,7 +2621,7 @@ export class GameScene extends Phaser.Scene {
         btnColor = 0x228822;
       }
 
-      const btnBg = this.add.rectangle(btnX, btnY, 70, 30, btnColor, 0.9)
+      const btnBg = this.add.rectangle(btnX, btnY, 65, 26, btnColor, 0.9)
         .setScrollFactor(0).setDepth(31).setInteractive({ useHandCursor: clickable });
       this[elements].push(btnBg);
 
@@ -2706,6 +2709,9 @@ export class GameScene extends Phaser.Scene {
       case 'healBase':     this.applyHealBase(ability, isP2);     break;
       case 'warDrums':     this.applyWarDrums(ability, isP2);     break;
       case 'goldMine':     this.applyGoldMine(ability, isP2);     break;
+      case 'rallyCry':     this.applyRallyCry(ability, isP2);     break;
+      case 'earthquake':   this.applyEarthquake(ability, isP2);   break;
+      case 'fortifyBase':  this.applyFortifyBase(ability, isP2);  break;
     }
   }
 
@@ -2780,6 +2786,67 @@ export class GameScene extends Phaser.Scene {
     this.updateActiveBuffsDisplay(isP2);
   }
 
+  applyRallyCry(ability, isP2 = false) {
+    const cooldowns = isP2 ? this.p2AbilityCooldowns : this.abilityCooldowns;
+    cooldowns[ability.id] = ability.cooldown;
+    this.sfx.rainOfArrows();
+    this.cameras.main.flash(300, 255, 68, 136);
+
+    const units = isP2 ? this.enemies : this.warriors;
+    units.getChildren().forEach((u) => {
+      if (!u.active || u.dying) return;
+      u.damage *= 1.5;
+    });
+
+    this.time.delayedCall(10000, () => {
+      units.getChildren().forEach((u) => {
+        if (!u.active || u.dying) return;
+        u.damage /= 1.5;
+      });
+    });
+  }
+
+  applyEarthquake(ability, isP2 = false) {
+    const cooldowns = isP2 ? this.p2AbilityCooldowns : this.abilityCooldowns;
+    cooldowns[ability.id] = ability.cooldown;
+    this.sfx.baseDamage();
+    this.cameras.main.flash(300, 136, 102, 68);
+
+    const targets = isP2 ? this.warriors : this.enemies;
+    targets.getChildren().forEach((u) => {
+      if (!u.active || u.dying) return;
+      u.speed *= 0.5;
+      if (u.body) u.body.velocity.x *= 0.5;
+    });
+
+    this.time.delayedCall(8000, () => {
+      targets.getChildren().forEach((u) => {
+        if (!u.active || u.dying) return;
+        u.speed *= 2;
+      });
+    });
+  }
+
+  applyFortifyBase(ability, isP2 = false) {
+    const passives = isP2 ? this.p2PurchasedPassives : this.purchasedPassives;
+    passives.add(ability.id);
+    this.sfx.healEffect();
+
+    if (isP2) {
+      this.maxEnemyBaseHP += 200;
+      this.enemyBaseHP = Math.min(this.maxEnemyBaseHP, this.enemyBaseHP + 200);
+      this.enemyHPText.setText(`HP: ${Math.ceil(this.enemyBaseHP)}`);
+      this.showDamageNumber(this.enemyBase.x, this.enemyBase.y - 60, 200, '#4488ff');
+    } else {
+      this.maxPlayerBaseHP += 200;
+      this.playerBaseHP = Math.min(this.maxPlayerBaseHP, this.playerBaseHP + 200);
+      this.playerHPText.setText(`HP: ${Math.ceil(this.playerBaseHP)}`);
+      this.showDamageNumber(this.playerBase.x, this.playerBase.y - 60, 200, '#4488ff');
+    }
+
+    this.updateActiveBuffsDisplay(isP2);
+  }
+
   updateActiveBuffsDisplay(isP2 = false) {
     const passives = isP2 ? this.p2PurchasedPassives : this.purchasedPassives;
     const textKey = isP2 ? 'p2ActiveBuffsText' : 'activeBuffsText';
@@ -2789,6 +2856,7 @@ export class GameScene extends Phaser.Scene {
     const buffs = [];
     if (passives.has('warDrums')) buffs.push('War Drums');
     if (passives.has('goldMine')) buffs.push('Gold Mine');
+    if (passives.has('fortifyBase')) buffs.push('Fortify Base');
 
     if (buffs.length > 0) {
       this[textKey] = this.add.text(16, 40, buffs.join(' | '), {
