@@ -646,6 +646,9 @@ export class GameScene extends Phaser.Scene {
     const style = this.ageConfig.baseStyle;
     const drawFns = {
       cave: this.drawCaveBase,
+      pyramid: this.drawPyramidBase,
+      hut: this.drawHutBase,
+      fort: this.drawFortBase,
       castle: this.drawCastleBase,
       bunker: this.drawBunkerBase,
       scifi: this.drawScifiBase,
@@ -759,6 +762,309 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0xff9933, 0.3);
       g.fillCircle(47, baseY - 136, 3);
       g.fillCircle(54, baseY - 134, 3);
+    }
+  }
+
+  drawPyramidBase(g, w, h, color, damageLevel) {
+    const baseY = h;
+    const darkerColor = Phaser.Display.Color.ValueToColor(color).darken(20).color;
+    const lighterColor = Phaser.Display.Color.ValueToColor(color).lighten(15).color;
+
+    // Main pyramid shape
+    g.fillStyle(color, 1);
+    g.beginPath();
+    g.moveTo(5, baseY);
+    g.lineTo(50, baseY - 130);
+    g.lineTo(95, baseY);
+    g.closePath();
+    g.fillPath();
+
+    // Brick lines
+    g.lineStyle(1, darkerColor, 0.4);
+    for (let row = 0; row < 5; row++) {
+      const py = baseY - 25 * row - 15;
+      const leftX = 5 + (45 * (py < baseY ? (baseY - py) / 130 : 0));
+      const rightX = 95 - (45 * (py < baseY ? (baseY - py) / 130 : 0));
+      g.beginPath();
+      g.moveTo(leftX, py);
+      g.lineTo(rightX, py);
+      g.strokePath();
+    }
+
+    // Doorway
+    g.fillStyle(0x111111, 1);
+    g.beginPath();
+    g.moveTo(36, baseY);
+    g.lineTo(36, baseY - 35);
+    g.lineTo(50, baseY - 45);
+    g.lineTo(64, baseY - 35);
+    g.lineTo(64, baseY);
+    g.closePath();
+    g.fillPath();
+
+    // Doorway outline
+    g.lineStyle(2, lighterColor, 0.6);
+    g.beginPath();
+    g.moveTo(36, baseY);
+    g.lineTo(36, baseY - 35);
+    g.lineTo(50, baseY - 45);
+    g.lineTo(64, baseY - 35);
+    g.lineTo(64, baseY);
+    g.strokePath();
+
+    // Eye of Horus accent near top
+    g.fillStyle(lighterColor, 0.6);
+    g.fillCircle(50, baseY - 100, 4);
+    g.lineStyle(1, lighterColor, 0.5);
+    g.beginPath();
+    g.moveTo(44, baseY - 100);
+    g.lineTo(56, baseY - 100);
+    g.strokePath();
+
+    if (damageLevel >= 1) {
+      g.lineStyle(2, 0x222222, 0.7);
+      g.beginPath();
+      g.moveTo(65, baseY - 90);
+      g.lineTo(60, baseY - 70);
+      g.lineTo(68, baseY - 55);
+      g.strokePath();
+      g.beginPath();
+      g.moveTo(30, baseY - 80);
+      g.lineTo(35, baseY - 60);
+      g.strokePath();
+      // Missing chunk
+      g.fillStyle(0x000000, 0.15);
+      g.fillTriangle(45, baseY - 130, 55, baseY - 130, 50, baseY - 115);
+    }
+
+    if (damageLevel >= 2) {
+      g.lineStyle(2, 0x222222, 0.8);
+      g.beginPath();
+      g.moveTo(25, baseY - 60);
+      g.lineTo(30, baseY - 40);
+      g.lineTo(22, baseY - 25);
+      g.strokePath();
+      // Rubble
+      g.fillStyle(darkerColor, 0.9);
+      g.fillCircle(15, baseY - 5, 5);
+      g.fillCircle(85, baseY - 8, 4);
+      // Fire
+      g.fillStyle(0xff6600, 0.5);
+      g.fillCircle(50, baseY - 125, 4);
+      g.fillStyle(0xff9933, 0.3);
+      g.fillCircle(47, baseY - 130, 3);
+    }
+  }
+
+  drawHutBase(g, w, h, color, damageLevel) {
+    const baseY = h;
+    const darkerColor = Phaser.Display.Color.ValueToColor(color).darken(20).color;
+    const lighterColor = Phaser.Display.Color.ValueToColor(color).lighten(15).color;
+    const thatchColor = 0x8a7a30;
+
+    // Circular wall
+    g.fillStyle(color, 1);
+    g.beginPath();
+    g.moveTo(15, baseY);
+    g.lineTo(15, baseY - 60);
+    g.arc(50, baseY - 60, 35, Math.PI, 0, false);
+    g.lineTo(85, baseY);
+    g.closePath();
+    g.fillPath();
+
+    // Thatched conical roof
+    g.fillStyle(thatchColor, 1);
+    g.beginPath();
+    g.moveTo(5, baseY - 55);
+    g.lineTo(50, baseY - 130);
+    g.lineTo(95, baseY - 55);
+    g.closePath();
+    g.fillPath();
+
+    // Thatch texture lines
+    g.lineStyle(1, darkerColor, 0.4);
+    g.beginPath();
+    g.moveTo(28, baseY - 92);
+    g.lineTo(50, baseY - 130);
+    g.lineTo(72, baseY - 92);
+    g.strokePath();
+    g.beginPath();
+    g.moveTo(16, baseY - 73);
+    g.lineTo(50, baseY - 130);
+    g.lineTo(84, baseY - 73);
+    g.strokePath();
+
+    // Roof outline
+    g.lineStyle(2, darkerColor, 0.6);
+    g.beginPath();
+    g.moveTo(5, baseY - 55);
+    g.lineTo(50, baseY - 130);
+    g.lineTo(95, baseY - 55);
+    g.strokePath();
+
+    // Doorway
+    g.fillStyle(0x111111, 1);
+    g.beginPath();
+    g.moveTo(37, baseY);
+    g.lineTo(37, baseY - 35);
+    g.arc(50, baseY - 35, 13, Math.PI, 0, false);
+    g.lineTo(63, baseY);
+    g.closePath();
+    g.fillPath();
+
+    // Doorway outline
+    g.lineStyle(2, lighterColor, 0.6);
+    g.beginPath();
+    g.moveTo(37, baseY);
+    g.lineTo(37, baseY - 35);
+    g.arc(50, baseY - 35, 13, Math.PI, 0, false);
+    g.lineTo(63, baseY);
+    g.strokePath();
+
+    // Wattle texture on walls
+    g.lineStyle(1, darkerColor, 0.3);
+    g.beginPath();
+    g.moveTo(20, baseY - 30);
+    g.lineTo(35, baseY - 28);
+    g.strokePath();
+    g.beginPath();
+    g.moveTo(65, baseY - 30);
+    g.lineTo(80, baseY - 28);
+    g.strokePath();
+
+    if (damageLevel >= 1) {
+      g.lineStyle(2, 0x222222, 0.7);
+      g.beginPath();
+      g.moveTo(70, baseY - 80);
+      g.lineTo(65, baseY - 65);
+      g.lineTo(72, baseY - 50);
+      g.strokePath();
+      // Missing thatch
+      g.fillStyle(0x000000, 0.15);
+      g.fillTriangle(60, baseY - 100, 75, baseY - 70, 55, baseY - 75);
+    }
+
+    if (damageLevel >= 2) {
+      g.lineStyle(2, 0x222222, 0.8);
+      g.beginPath();
+      g.moveTo(25, baseY - 50);
+      g.lineTo(30, baseY - 35);
+      g.strokePath();
+      // Rubble
+      g.fillStyle(darkerColor, 0.9);
+      g.fillCircle(12, baseY - 5, 5);
+      g.fillCircle(88, baseY - 6, 4);
+      // Fire on roof
+      g.fillStyle(0xff6600, 0.5);
+      g.fillCircle(50, baseY - 125, 4);
+      g.fillStyle(0xff9933, 0.3);
+      g.fillCircle(46, baseY - 130, 3);
+      g.fillCircle(55, baseY - 128, 3);
+    }
+  }
+
+  drawFortBase(g, w, h, color, damageLevel) {
+    const baseY = h;
+    const darkerColor = Phaser.Display.Color.ValueToColor(color).darken(20).color;
+    const lighterColor = Phaser.Display.Color.ValueToColor(color).lighten(15).color;
+
+    // Main rectangular structure
+    g.fillStyle(color, 1);
+    g.fillRect(10, baseY - 100, 80, 100);
+
+    // Pediment (triangular roof)
+    g.fillStyle(darkerColor, 1);
+    g.beginPath();
+    g.moveTo(5, baseY - 100);
+    g.lineTo(50, baseY - 130);
+    g.lineTo(95, baseY - 100);
+    g.closePath();
+    g.fillPath();
+
+    // Pediment outline
+    g.lineStyle(2, lighterColor, 0.6);
+    g.beginPath();
+    g.moveTo(5, baseY - 100);
+    g.lineTo(50, baseY - 130);
+    g.lineTo(95, baseY - 100);
+    g.strokePath();
+
+    // Columns
+    g.fillStyle(lighterColor, 0.8);
+    g.fillRect(15, baseY - 95, 8, 95);
+    g.fillRect(77, baseY - 95, 8, 95);
+
+    // Column capitals (simple rectangles on top)
+    g.fillStyle(lighterColor, 0.9);
+    g.fillRect(13, baseY - 100, 12, 5);
+    g.fillRect(75, baseY - 100, 12, 5);
+
+    // Arched gate
+    g.fillStyle(0x111111, 1);
+    g.beginPath();
+    g.moveTo(34, baseY);
+    g.lineTo(34, baseY - 40);
+    g.arc(50, baseY - 40, 16, Math.PI, 0, false);
+    g.lineTo(66, baseY);
+    g.closePath();
+    g.fillPath();
+
+    // Arch keystone accent
+    g.lineStyle(2, lighterColor, 0.7);
+    g.beginPath();
+    g.moveTo(34, baseY);
+    g.lineTo(34, baseY - 40);
+    g.arc(50, baseY - 40, 16, Math.PI, 0, false);
+    g.lineTo(66, baseY);
+    g.strokePath();
+
+    // Horizontal band
+    g.lineStyle(2, lighterColor, 0.5);
+    g.beginPath();
+    g.moveTo(10, baseY - 65);
+    g.lineTo(90, baseY - 65);
+    g.strokePath();
+
+    // Window slits
+    g.fillStyle(0x111111, 0.8);
+    g.fillRect(28, baseY - 80, 6, 10);
+    g.fillRect(66, baseY - 80, 6, 10);
+
+    if (damageLevel >= 1) {
+      g.lineStyle(2, 0x222222, 0.7);
+      g.beginPath();
+      g.moveTo(70, baseY - 90);
+      g.lineTo(65, baseY - 75);
+      g.lineTo(72, baseY - 60);
+      g.strokePath();
+      g.beginPath();
+      g.moveTo(25, baseY - 85);
+      g.lineTo(30, baseY - 70);
+      g.strokePath();
+      // Missing chunk from pediment
+      g.fillStyle(0x000000, 0.15);
+      g.fillTriangle(45, baseY - 130, 55, baseY - 130, 50, baseY - 118);
+    }
+
+    if (damageLevel >= 2) {
+      g.lineStyle(2, 0x222222, 0.8);
+      g.beginPath();
+      g.moveTo(20, baseY - 70);
+      g.lineTo(25, baseY - 50);
+      g.lineTo(18, baseY - 35);
+      g.strokePath();
+      // Broken column
+      g.fillStyle(0x000000, 0.2);
+      g.fillRect(77, baseY - 50, 8, 50);
+      // Rubble
+      g.fillStyle(darkerColor, 0.9);
+      g.fillCircle(88, baseY - 5, 5);
+      g.fillCircle(8, baseY - 5, 4);
+      // Fire
+      g.fillStyle(0xff6600, 0.5);
+      g.fillCircle(50, baseY - 125, 4);
+      g.fillStyle(0xff9933, 0.3);
+      g.fillCircle(47, baseY - 130, 3);
     }
   }
 

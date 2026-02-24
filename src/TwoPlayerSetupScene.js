@@ -20,39 +20,45 @@ export class TwoPlayerSetupScene extends Phaser.Scene {
       fontSize: '14px', color: '#aaaaaa',
     }).setOrigin(0.5);
 
-    // Age cards
-    const cardW = 200;
-    const cardH = 160;
-    const gap = 20;
-    const totalW = AGES.length * cardW + (AGES.length - 1) * gap;
-    const startX = cx - totalW / 2;
-    const cardY = 190;
+    // Age cards — 2-row layout for 7 ages
+    const cardW = 180;
+    const cardH = 130;
+    const gap = 14;
+    const row1Count = 4;
+    const row1Y = 150;
+    const row2Y = 300;
 
     this.selectedAge = null;
     this.difficultyElements = [];
     this.ageCards = [];
 
     AGES.forEach((age, i) => {
-      const x = startX + i * (cardW + gap) + cardW / 2;
+      const row = i < row1Count ? 0 : 1;
+      const colCount = row === 0 ? row1Count : AGES.length - row1Count;
+      const col = row === 0 ? i : i - row1Count;
+      const totalW = colCount * cardW + (colCount - 1) * gap;
+      const startX = cx - totalW / 2;
+      const x = startX + col * (cardW + gap) + cardW / 2;
+      const cardY = row === 0 ? row1Y : row2Y;
 
       const card = this.add.rectangle(x, cardY, cardW, cardH, 0x222244, 0.9)
         .setStrokeStyle(2, 0xffd700);
       this.ageCards.push(card);
 
       // Age name
-      this.add.text(x, cardY - 50, age.name, {
-        fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
+      this.add.text(x, cardY - 42, age.name, {
+        fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
       }).setOrigin(0.5);
 
       // Description
-      this.add.text(x, cardY - 20, age.description, {
-        fontSize: '11px', color: '#aaaaaa',
-        wordWrap: { width: cardW - 20 }, align: 'center',
+      this.add.text(x, cardY - 18, age.description, {
+        fontSize: '10px', color: '#aaaaaa',
+        wordWrap: { width: cardW - 16 }, align: 'center',
       }).setOrigin(0.5);
 
       // Stats
-      this.add.text(x, cardY + 15, `Stat Scale: ${age.statMult}x`, {
-        fontSize: '12px', color: '#88aaff',
+      this.add.text(x, cardY + 10, `Stat Scale: ${age.statMult}x`, {
+        fontSize: '11px', color: '#88aaff',
       }).setOrigin(0.5);
 
       // Selectable
@@ -72,13 +78,13 @@ export class TwoPlayerSetupScene extends Phaser.Scene {
         this.showDifficultyButtons(i);
       });
 
-      this.add.text(x, cardY + 50, 'Click to Play', {
-        fontSize: '13px', color: '#88ff88',
+      this.add.text(x, cardY + 40, 'Click to Play', {
+        fontSize: '12px', color: '#88ff88',
       }).setOrigin(0.5);
     });
 
     // Difficulty section
-    this.difficultyY = 320;
+    this.difficultyY = 400;
 
     // Back button
     const backBtn = this.add.rectangle(cx, 520, 180, 44, 0x336699, 0.9)
@@ -99,23 +105,23 @@ export class TwoPlayerSetupScene extends Phaser.Scene {
     const y = this.difficultyY;
 
     const header = this.add.text(cx, y, `Choose Difficulty for ${AGES[ageIndex].name}`, {
-      fontSize: '20px', color: '#ffffff', fontStyle: 'bold',
+      fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5);
     this.difficultyElements.push(header);
 
-    const subheader = this.add.text(cx, y + 25, 'Both players get equal stats in 2P mode', {
-      fontSize: '12px', color: '#aaaaaa',
+    const subheader = this.add.text(cx, y + 20, 'Both players get equal stats in 2P mode', {
+      fontSize: '11px', color: '#aaaaaa',
     }).setOrigin(0.5);
     this.difficultyElements.push(subheader);
 
     const keys = Object.keys(DIFFICULTIES);
-    const btnW = 180;
-    const btnH = 50;
-    const gap = 16;
+    const btnW = 170;
+    const btnH = 40;
+    const gap = 14;
     const totalW = keys.length * btnW + (keys.length - 1) * gap;
     const startX = cx - totalW / 2;
-    const btnY = y + 70;
+    const btnY = y + 52;
 
     const descriptions = [
       'More starting gold',
@@ -133,13 +139,13 @@ export class TwoPlayerSetupScene extends Phaser.Scene {
       this.difficultyElements.push(btn);
 
       const label = this.add.text(x, btnY, diff.label, {
-        fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
+        fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 2,
       }).setOrigin(0.5);
       this.difficultyElements.push(label);
 
-      const desc = this.add.text(x, btnY + 35, descriptions[i], {
-        fontSize: '12px', color: '#aaaaaa',
+      const desc = this.add.text(x, btnY + 28, descriptions[i], {
+        fontSize: '11px', color: '#aaaaaa',
       }).setOrigin(0.5);
       this.difficultyElements.push(desc);
 

@@ -7,8 +7,8 @@ const STORAGE_KEY = 'stickman_progress';
 export const SONGS = [
   { id: 'bgMusic',    title: 'Default Theme',   file: 'music/bg-music.mp3', unlocksAfterAge: -1 },
   { id: 'spongebob',  title: 'SpongeBob Theme', file: 'music/SpongeBob SquarePants Theme Song (NEW HD)  Episode Opening Credits  Nick Animation.mp3', unlocksAfterAge: 0 },
-  { id: 'whatIsLove', title: 'What Is Love',    file: 'music/Haddaway - What Is Love (Official 4K).mp3', unlocksAfterAge: 1 },
-  { id: 'sweetVictory', title: 'Sweet Victory', file: 'music/Sweet Victory Performance  Band Geeks  SpongeBob.mp3', unlocksAfterAge: 2 },
+  { id: 'whatIsLove', title: 'What Is Love',    file: 'music/Haddaway - What Is Love (Official 4K).mp3', unlocksAfterAge: 3 },
+  { id: 'sweetVictory', title: 'Sweet Victory', file: 'music/Sweet Victory Performance  Band Geeks  SpongeBob.mp3', unlocksAfterAge: 5 },
 ];
 
 function loadProgress() {
@@ -49,13 +49,13 @@ export class LevelSelectScene extends Phaser.Scene {
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5);
 
-    // Age cards
-    const cardW = 200;
-    const cardH = 180;
-    const gap = 20;
-    const totalW = AGES.length * cardW + (AGES.length - 1) * gap;
-    const startX = cx - totalW / 2;
-    const cardY = 180;
+    // Age cards — 2-row layout for 7 ages
+    const cardW = 180;
+    const cardH = 140;
+    const gap = 14;
+    const row1Count = 4;
+    const row1Y = 140;
+    const row2Y = 300;
 
     this.selectedAge = null;
     this.difficultyElements = [];
@@ -64,7 +64,13 @@ export class LevelSelectScene extends Phaser.Scene {
     this.shopElements = [];
 
     AGES.forEach((age, i) => {
-      const x = startX + i * (cardW + gap) + cardW / 2;
+      const row = i < row1Count ? 0 : 1;
+      const colCount = row === 0 ? row1Count : AGES.length - row1Count;
+      const col = row === 0 ? i : i - row1Count;
+      const totalW = colCount * cardW + (colCount - 1) * gap;
+      const startX = cx - totalW / 2;
+      const x = startX + col * (cardW + gap) + cardW / 2;
+      const cardY = row === 0 ? row1Y : row2Y;
       const isLocked = i > unlocked;
 
       // Card background
@@ -75,29 +81,29 @@ export class LevelSelectScene extends Phaser.Scene {
       if (!isLocked) this.ageCards.push(card);
 
       // Age name
-      this.add.text(x, cardY - 60, age.name, {
-        fontSize: '18px', color: isLocked ? '#666666' : '#ffffff', fontStyle: 'bold',
+      this.add.text(x, cardY - 48, age.name, {
+        fontSize: '16px', color: isLocked ? '#666666' : '#ffffff', fontStyle: 'bold',
       }).setOrigin(0.5);
 
       // Description
-      this.add.text(x, cardY - 30, age.description, {
-        fontSize: '11px', color: isLocked ? '#555555' : '#aaaaaa',
-        wordWrap: { width: cardW - 20 }, align: 'center',
+      this.add.text(x, cardY - 24, age.description, {
+        fontSize: '10px', color: isLocked ? '#555555' : '#aaaaaa',
+        wordWrap: { width: cardW - 16 }, align: 'center',
       }).setOrigin(0.5);
 
       // Stats info
       const statColor = isLocked ? '#555555' : '#88aaff';
-      this.add.text(x, cardY + 10, `Stat Scale: ${age.statMult}x`, {
-        fontSize: '12px', color: statColor,
+      this.add.text(x, cardY + 6, `Stat Scale: ${age.statMult}x`, {
+        fontSize: '11px', color: statColor,
       }).setOrigin(0.5);
-      this.add.text(x, cardY + 28, `Enemy Base: ${age.enemyBaseHP} HP`, {
-        fontSize: '12px', color: statColor,
+      this.add.text(x, cardY + 22, `Enemy Base: ${age.enemyBaseHP} HP`, {
+        fontSize: '11px', color: statColor,
       }).setOrigin(0.5);
 
       if (isLocked) {
         // Lock indicator
-        this.add.text(x, cardY + 58, '[LOCKED]', {
-          fontSize: '16px', color: '#666666', fontStyle: 'bold',
+        this.add.text(x, cardY + 48, '[LOCKED]', {
+          fontSize: '14px', color: '#666666', fontStyle: 'bold',
         }).setOrigin(0.5);
       } else {
         // Selectable
@@ -120,22 +126,22 @@ export class LevelSelectScene extends Phaser.Scene {
         });
 
         // "Select" hint
-        this.add.text(x, cardY + 58, 'Click to Play', {
-          fontSize: '13px', color: '#88ff88',
+        this.add.text(x, cardY + 48, 'Click to Play', {
+          fontSize: '12px', color: '#88ff88',
         }).setOrigin(0.5);
       }
     });
 
     // Bird unlock banner
     if (progress.birdUnlocked) {
-      this.add.text(cx, cardY + cardH / 2 + 20, 'Bird Unit Unlocked!', {
-        fontSize: '18px', color: '#ffd700', fontStyle: 'bold',
+      this.add.text(cx, row2Y + cardH / 2 + 16, 'Bird Unit Unlocked!', {
+        fontSize: '16px', color: '#ffd700', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 3,
       }).setOrigin(0.5);
     }
 
     // Difficulty section (populated on age click)
-    this.difficultyY = 320;
+    this.difficultyY = 400;
 
     // Back to Menu button
     const backBtn = this.add.rectangle(cx - 110, 520, 180, 44, 0x336699, 0.9)
@@ -167,18 +173,18 @@ export class LevelSelectScene extends Phaser.Scene {
     const y = this.difficultyY;
 
     const header = this.add.text(cx, y, `Choose Difficulty for ${AGES[ageIndex].name}`, {
-      fontSize: '20px', color: '#ffffff', fontStyle: 'bold',
+      fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5);
     this.difficultyElements.push(header);
 
     const keys = Object.keys(DIFFICULTIES);
-    const btnW = 180;
-    const btnH = 50;
-    const gap = 16;
+    const btnW = 170;
+    const btnH = 40;
+    const gap = 14;
     const totalW = keys.length * btnW + (keys.length - 1) * gap;
     const startX = cx - totalW / 2;
-    const btnY = y + 50;
+    const btnY = y + 38;
 
     const descriptions = [
       'More gold, weaker enemies',
@@ -196,13 +202,13 @@ export class LevelSelectScene extends Phaser.Scene {
       this.difficultyElements.push(btn);
 
       const label = this.add.text(x, btnY, diff.label, {
-        fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
+        fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 2,
       }).setOrigin(0.5);
       this.difficultyElements.push(label);
 
-      const desc = this.add.text(x, btnY + 35, descriptions[i], {
-        fontSize: '12px', color: '#aaaaaa',
+      const desc = this.add.text(x, btnY + 28, descriptions[i], {
+        fontSize: '11px', color: '#aaaaaa',
       }).setOrigin(0.5);
       this.difficultyElements.push(desc);
 
