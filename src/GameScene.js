@@ -23,6 +23,7 @@ const ABILITIES = [
   { id: 'rallyCry',     name: 'Rally Cry',       cost: 125, description: '+50% unit dmg for 10s',  type: 'instant', cooldown: 25, color: 0xff4488 },
   { id: 'earthquake',   name: 'Earthquake',      cost: 100, description: 'Slow enemies 50% for 8s', type: 'instant', cooldown: 20, color: 0x886644 },
   { id: 'fortifyBase',  name: 'Fortify Base',    cost: 200, description: '+200 max base HP & heal', type: 'passive', cooldown: 0,  color: 0x4488ff },
+  { id: 'turret',       name: 'Base Turret',     cost: 175, description: 'Turret archers defend base', type: 'passive', cooldown: 0,  color: 0x44ffcc },
 ];
 
 const WEATHER_TYPES = [
@@ -136,6 +137,10 @@ export class GameScene extends Phaser.Scene {
       fontSize: '12px', color: '#ffffff',
       stroke: '#000000', strokeThickness: 2,
     }).setDepth(10);
+
+    // ── Turret arrays ─────────────────────────────────────────
+    this.playerTurrets = [];
+    this.enemyTurrets = [];
 
     // ── HUD element arrays for 2P camera ignore ──────────────
     this.p1HudElements = [];
@@ -2544,7 +2549,7 @@ export class GameScene extends Phaser.Scene {
     const panelX = this.twoPlayer ? 256 : 512;
     const panelY = 288;
     const panelW = this.twoPlayer ? 400 : 460;
-    const panelH = 540;
+    const panelH = 510;
     const backdropW = this.twoPlayer ? 512 : 1024;
 
     // Backdrop
@@ -2572,7 +2577,7 @@ export class GameScene extends Phaser.Scene {
 
     // Ability rows
     const rowStartY = panelY - panelH / 2 + 70;
-    const rowH = 58;
+    const rowH = 54;
 
     ABILITIES.forEach((ability, i) => {
       const rowY = rowStartY + i * rowH;
@@ -2712,6 +2717,7 @@ export class GameScene extends Phaser.Scene {
       case 'rallyCry':     this.applyRallyCry(ability, isP2);     break;
       case 'earthquake':   this.applyEarthquake(ability, isP2);   break;
       case 'fortifyBase':  this.applyFortifyBase(ability, isP2);  break;
+      case 'turret':       this.applyTurret(ability, isP2);      break;
     }
   }
 
@@ -2847,6 +2853,98 @@ export class GameScene extends Phaser.Scene {
     this.updateActiveBuffsDisplay(isP2);
   }
 
+  applyTurret(ability, isP2 = false) {
+    const passives = isP2 ? this.p2PurchasedPassives : this.purchasedPassives;
+    passives.add(ability.id);
+    this.sfx.playerSpawn();
+
+    const baseX = isP2 ? this.enemyBase.x : this.playerBase.x;
+    const turrets = isP2 ? this.enemyTurrets : this.playerTurrets;
+    const targets = isP2 ? this.warriors : this.enemies;
+    const turretColor = isP2 ? 0x44ccff : 0x44ffcc;
+
+    // Spawn 2 turret archers on the base
+    const offsets = [-15, 15];
+    offsets.forEach(ox => {
+      const tx = baseX + ox;
+      const ty = GROUND_Y - 150;
+      const g = this.add.graphics().setDepth(11);
+      // Body circle
+      g.fillStyle(turretColor, 1);
+      g.fillCircle(tx, ty, 6);
+      // Bow line
+      g.lineStyle(2, 0xffd700);
+      g.beginPath();
+      g.moveTo(tx + 6, ty - 4);
+      g.lineTo(tx + 14, ty);
+      g.lineTo(tx + 6, ty + 4);
+      g.strokePath();
+      turrets.push(g);
+    });
+
+    // Firing timer
+    this.time.addEvent({
+      delay: 1500,
+      loop: true,
+      callback: () => {
+        const turretPositions = offsets.map(ox => ({ x: baseX + ox, y: GROUND_Y - 150 }));
+        turretPositions.forEach(tp => {
+          // Find nearest target within 400px of base
+          let nearest = null;
+          let nearestDist = 400;
+          targets.getChildren().forEach(u => {
+            if (!u.active || u.getData('dying')) return;
+            const dist = Math.abs(u.x - baseX);
+            if (dist < nearestDist) {
+              nearestDist = dist;
+              nearest = u;
+            }
+          });
+          if (!nearest) return;
+
+          // Create projectile
+          const proj = this.add.circle(tp.x, tp.y, 4, 0xffaa00).setDepth(12);
+          this.tweens.add({
+            targets: proj,
+            x: nearest.x,
+            y: nearest.y,
+            duration: 400,
+            onComplete: () => {
+              proj.destroy();
+              if (!nearest.active || nearest.getData('dying')) return;
+              const hp = nearest.getData('hp') - 10;
+              nearest.setData('hp', hp);
+              this.showDamageNumber(nearest.x, nearest.y - 20, 10, '#ffaa00');
+              if (hp <= 0) {
+                nearest.setData('dying', true);
+                nearest.setVelocity(0, 0);
+                this.tweens.add({
+                  targets: nearest,
+                  alpha: 0,
+                  duration: 300,
+                  onComplete: () => nearest.destroy(),
+                });
+                // Gold reward
+                const unitType = nearest.getData('unitType');
+                if (unitType) {
+                  const reward = Math.floor(unitType.cost / 5);
+                  if (isP2) {
+                    this.enemyGold += reward;
+                  } else {
+                    this.gold += reward;
+                    this.updateGoldText();
+                  }
+                }
+              }
+            },
+          });
+        });
+      },
+    });
+
+    this.updateActiveBuffsDisplay(isP2);
+  }
+
   updateActiveBuffsDisplay(isP2 = false) {
     const passives = isP2 ? this.p2PurchasedPassives : this.purchasedPassives;
     const textKey = isP2 ? 'p2ActiveBuffsText' : 'activeBuffsText';
@@ -2857,6 +2955,7 @@ export class GameScene extends Phaser.Scene {
     if (passives.has('warDrums')) buffs.push('War Drums');
     if (passives.has('goldMine')) buffs.push('Gold Mine');
     if (passives.has('fortifyBase')) buffs.push('Fortify Base');
+    if (passives.has('turret')) buffs.push('Base Turret');
 
     if (buffs.length > 0) {
       this[textKey] = this.add.text(16, 40, buffs.join(' | '), {
