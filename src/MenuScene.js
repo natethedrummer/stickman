@@ -48,8 +48,19 @@ export class MenuScene extends Phaser.Scene {
     tutBtn.on('pointerout', () => tutBtn.setAlpha(0.9));
     tutBtn.on('pointerdown', () => this.scene.start('TutorialScene'));
 
+    // 2 Player button
+    const twoPlayerBtn = this.add.rectangle(cx, 440, 220, 50, 0x882222, 0.9)
+      .setInteractive({ useHandCursor: true });
+    this.add.text(cx, 440, '2 PLAYER', {
+      fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5);
+    twoPlayerBtn.on('pointerover', () => twoPlayerBtn.setAlpha(1));
+    twoPlayerBtn.on('pointerout', () => twoPlayerBtn.setAlpha(0.9));
+    twoPlayerBtn.on('pointerdown', () => this.scene.start('TwoPlayerSetupScene'));
+
     // Footer
-    this.add.text(cx, 480, 'Arrow keys or on-screen buttons to scroll the battlefield', {
+    this.add.text(cx, 520, 'Arrow keys or on-screen buttons to scroll the battlefield', {
       fontSize: '14px', color: '#888888',
     }).setOrigin(0.5);
   }

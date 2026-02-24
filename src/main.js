@@ -3,6 +3,7 @@ import { MenuScene } from './MenuScene.js';
 import { TutorialScene } from './TutorialScene.js';
 import { LevelSelectScene } from './LevelSelectScene.js';
 import { GameScene } from './GameScene.js';
+import { TwoPlayerSetupScene } from './TwoPlayerSetupScene.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -20,7 +21,7 @@ const config = {
       debug: false,
     },
   },
-  scene: [MenuScene, TutorialScene, LevelSelectScene, GameScene],
+  scene: [MenuScene, TutorialScene, LevelSelectScene, GameScene, TwoPlayerSetupScene],
 };
 
 new Phaser.Game(config);

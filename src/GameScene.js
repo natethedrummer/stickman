@@ -49,6 +49,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(data) {
+    this.twoPlayer = !!(data && data.twoPlayer);
+
     const diffKey = (data && data.difficulty) || 'medium';
     this.difficulty = DIFFICULTIES[diffKey] || DIFFICULTIES.medium;
 
@@ -76,9 +78,9 @@ export class GameScene extends Phaser.Scene {
       this.unitTypes = this.unitTypes.filter((t) => t.name !== 'Bird');
     }
 
-    // Base HP from age config
+    // Base HP from age config (equal in 2P)
     this.maxPlayerBaseHP = BASE_HP;
-    this.maxEnemyBaseHP = this.ageConfig.enemyBaseHP;
+    this.maxEnemyBaseHP = this.twoPlayer ? BASE_HP : this.ageConfig.enemyBaseHP;
 
     this.cleanupTextures();
     this.generateStickmanTextures();
@@ -104,7 +106,7 @@ export class GameScene extends Phaser.Scene {
     playerBaseBody.unitHeight = 120;
     this.physics.add.existing(playerBaseBody, true);
     this.playerBasePhysics = playerBaseBody;
-    this.playerBaseLabel = this.add.text(20, GROUND_Y - 155, 'Your Base', {
+    this.playerBaseLabel = this.add.text(20, GROUND_Y - 155, this.twoPlayer ? 'P1 Base' : 'Your Base', {
       fontSize: '13px', color: '#ffffff',
       stroke: '#000000', strokeThickness: 2,
     }).setDepth(10);
@@ -123,7 +125,7 @@ export class GameScene extends Phaser.Scene {
     enemyBaseBody.unitHeight = 120;
     this.physics.add.existing(enemyBaseBody, true);
     this.enemyBasePhysics = enemyBaseBody;
-    this.enemyBaseLabel = this.add.text(GAME_W - 110, GROUND_Y - 155, 'Enemy Base', {
+    this.enemyBaseLabel = this.add.text(GAME_W - 110, GROUND_Y - 155, this.twoPlayer ? 'P2 Base' : 'Enemy Base', {
       fontSize: '13px', color: '#ffffff',
       stroke: '#000000', strokeThickness: 2,
     }).setDepth(10);
@@ -132,11 +134,26 @@ export class GameScene extends Phaser.Scene {
       stroke: '#000000', strokeThickness: 2,
     }).setDepth(10);
 
+    // ── HUD element arrays for 2P camera ignore ──────────────
+    this.p1HudElements = [];
+    this.p2HudElements = [];
+
     // ── Gold ────────────────────────────────────────────────
     this.gold = this.difficulty.startGold;
     this.enemyGold = this.difficulty.startGold;
-    this.goldText = this.add.text(16, 16, '', { fontSize: '20px', color: '#FFD700' }).setDepth(20);
+    this.goldText = this.add.text(16, 16, '', { fontSize: this.twoPlayer ? '16px' : '20px', color: '#FFD700' }).setDepth(20);
     this.updateGoldText();
+
+    // P2 gold economy
+    if (this.twoPlayer) {
+      this.p2Gold = this.difficulty.startGold;
+      this.p2GoldIncomeMultiplier = 1;
+      this.p2SpeedMultiplier = 1;
+      this.p2PurchasedPassives = new Set();
+      this.p2AbilityCooldowns = {};
+      this.p2GoldText = this.add.text(16, 16, '', { fontSize: '16px', color: '#FFD700' }).setDepth(20);
+      this.updateP2GoldText();
+    }
 
     // passive gold income
     this.time.addEvent({
@@ -144,25 +161,70 @@ export class GameScene extends Phaser.Scene {
       loop: true,
       callback: () => {
         this.gold += this.difficulty.playerGoldPerSec * this.goldIncomeMultiplier;
-        this.enemyGold += this.difficulty.enemyGoldPerSec;
+        if (this.twoPlayer) {
+          this.p2Gold += this.difficulty.playerGoldPerSec * this.p2GoldIncomeMultiplier;
+          this.updateP2GoldText();
+        } else {
+          this.enemyGold += this.difficulty.enemyGoldPerSec;
+        }
         this.updateGoldText();
       },
     });
 
     // ── Spawn buttons ─────────────────────────────────────────
-    const btnStartX = 130;
-    const btnW = 160;
-    const btnGap = 8;
-    this.unitTypes.forEach((type, i) => {
-      const x = btnStartX + i * (btnW + btnGap);
-      const btnColor = type.name === 'Bird' ? 0x886600 : 0x226622;
-      const btn = this.add.rectangle(x, 20, btnW, 36, btnColor, 0.9).setOrigin(0, 0).setScrollFactor(0).setDepth(20);
-      const label = this.add.text(x + 8, 26, `${type.displayName} (${type.cost}g)`, {
-        fontSize: '14px', color: '#ffffff',
-      }).setScrollFactor(0).setDepth(20);
-      btn.setInteractive({ useHandCursor: true });
-      btn.on('pointerdown', () => this.spawnUnit(type));
-    });
+    if (this.twoPlayer) {
+      // P1 spawn buttons (smaller to fit in 512px viewport)
+      const p1BtnW = 90;
+      const p1BtnGap = 4;
+      const p1BtnStartX = 95;
+      this.unitTypes.forEach((type, i) => {
+        const x = p1BtnStartX + i * (p1BtnW + p1BtnGap);
+        const btnColor = type.name === 'Bird' ? 0x886600 : 0x223366;
+        const btn = this.add.rectangle(x, 20, p1BtnW, 36, btnColor, 0.9).setOrigin(0, 0).setScrollFactor(0).setDepth(20);
+        const label = this.add.text(x + 4, 26, `${type.displayName} (${type.cost}g)`, {
+          fontSize: '10px', color: '#ffffff',
+        }).setScrollFactor(0).setDepth(20);
+        btn.setInteractive({ useHandCursor: true });
+        btn.on('pointerdown', (pointer) => {
+          if (pointer.x >= 512) return; // P1 clicks only on left half
+          this.spawnUnit(type);
+        });
+        this.p1HudElements.push(btn, label);
+      });
+
+      // P2 spawn buttons
+      const p2BtnW = 90;
+      const p2BtnGap = 4;
+      const p2BtnStartX = 95;
+      this.unitTypes.forEach((type, i) => {
+        const x = p2BtnStartX + i * (p2BtnW + p2BtnGap);
+        const btnColor = type.name === 'Bird' ? 0x886600 : 0x662222;
+        const btn = this.add.rectangle(x, 20, p2BtnW, 36, btnColor, 0.9).setOrigin(0, 0).setScrollFactor(0).setDepth(20);
+        const label = this.add.text(x + 4, 26, `${type.displayName} (${type.cost}g)`, {
+          fontSize: '10px', color: '#ffffff',
+        }).setScrollFactor(0).setDepth(20);
+        btn.setInteractive({ useHandCursor: true });
+        btn.on('pointerdown', (pointer) => {
+          if (pointer.x < 512) return; // P2 clicks only on right half
+          this.spawnP2Unit(type);
+        });
+        this.p2HudElements.push(btn, label);
+      });
+    } else {
+      const btnStartX = 130;
+      const btnW = 160;
+      const btnGap = 8;
+      this.unitTypes.forEach((type, i) => {
+        const x = btnStartX + i * (btnW + btnGap);
+        const btnColor = type.name === 'Bird' ? 0x886600 : 0x226622;
+        const btn = this.add.rectangle(x, 20, btnW, 36, btnColor, 0.9).setOrigin(0, 0).setScrollFactor(0).setDepth(20);
+        const label = this.add.text(x + 8, 26, `${type.displayName} (${type.cost}g)`, {
+          fontSize: '14px', color: '#ffffff',
+        }).setScrollFactor(0).setDepth(20);
+        btn.setInteractive({ useHandCursor: true });
+        btn.on('pointerdown', () => this.spawnUnit(type));
+      });
+    }
 
     // ── Groups ──────────────────────────────────────────────
     this.warriors = this.physics.add.group();
@@ -176,20 +238,40 @@ export class GameScene extends Phaser.Scene {
     // Warriors vs enemies — they stop and fight
     this.physics.add.overlap(this.warriors, this.enemies, this.unitFight, null, this);
 
-    // ── Enemy spawner ───────────────────────────────────────
-    this.time.addEvent({
-      delay: this.difficulty.enemySpawnInterval,
-      loop: true,
-      callback: () => this.spawnEnemy(),
-    });
+    // ── Enemy spawner (AI only in single player) ─────────────
+    if (!this.twoPlayer) {
+      this.time.addEvent({
+        delay: this.difficulty.enemySpawnInterval,
+        loop: true,
+        callback: () => this.spawnEnemy(),
+      });
+    }
 
     // ── Camera & physics bounds ─────────────────────────────
     this.physics.world.setBounds(0, 0, GAME_W, 576);
     this.cameras.main.setBounds(0, 0, GAME_W, 576);
     this.cursors = this.input.keyboard.createCursorKeys();
 
+    // ── Split-screen cameras for 2P ──────────────────────────
+    if (this.twoPlayer) {
+      this.cameras.main.setViewport(0, 0, 512, 576);
+      this.cameras.main.scrollX = 0;
+
+      this.p2Camera = this.cameras.add(512, 0, 512, 576);
+      this.p2Camera.setBounds(0, 0, GAME_W, 576);
+      this.p2Camera.scrollX = GAME_W - 1024;
+
+      // P1 WASD keys
+      this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+      this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    }
+
     // ── Pin HUD to camera ─────────────────────────────────
     this.goldText.setScrollFactor(0);
+    if (this.twoPlayer) {
+      this.p1HudElements.push(this.goldText);
+      this.p2HudElements.push(this.p2GoldText);
+    }
 
     // ── Background music ─────────────────────────────────────
     const progress = loadProgress();
@@ -197,26 +279,30 @@ export class GameScene extends Phaser.Scene {
     this.music = this.sound.add(songKey, { loop: true, volume: 0.5 });
     this.music.play();
 
-    // ── Mute toggle button (top-right, pinned to camera) ────
-    this.muteBtn = this.add.text(1024 - 40, 16, '♪', {
+    // ── Mute toggle button (top-right, pinned to P1 camera) ────
+    const muteX = this.twoPlayer ? 512 - 40 : 1024 - 40;
+    this.muteBtn = this.add.text(muteX, 16, '♪', {
       fontSize: '24px', color: '#ffffff',
     }).setScrollFactor(0).setInteractive({ useHandCursor: true }).setDepth(20);
     this.muteBtn.on('pointerdown', () => {
       this.sound.mute = !this.sound.mute;
       this.muteBtn.setText(this.sound.mute ? '♪X' : '♪');
     });
+    if (this.twoPlayer) this.p1HudElements.push(this.muteBtn);
 
-    // ── Quit button (top-right) ─────────────────────────────────
+    // ── Quit button (top-right of P1 viewport) ─────────────────────
     this.quitConfirm = false;
-    const quitBtnBg = this.add.rectangle(1024 - 40, 48, 36, 22, 0x663333, 0.9)
+    const quitX = this.twoPlayer ? 512 - 40 : 1024 - 40;
+    const quitBtnBg = this.add.rectangle(quitX, 48, 36, 22, 0x663333, 0.9)
       .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
-    this.quitBtnText = this.add.text(1024 - 40, 48, 'Quit', {
+    this.quitBtnText = this.add.text(quitX, 48, 'Quit', {
       fontSize: '11px', color: '#ff8888', fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+    if (this.twoPlayer) this.p1HudElements.push(quitBtnBg, this.quitBtnText);
     quitBtnBg.on('pointerdown', () => {
       if (this.quitConfirm) {
         if (this.music) this.music.stop();
-        this.scene.start('LevelSelectScene');
+        this.scene.start(this.twoPlayer ? 'MenuScene' : 'LevelSelectScene');
       } else {
         this.quitConfirm = true;
         this.quitBtnText.setText('Sure?');
@@ -227,19 +313,46 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // ── Shop button (top-right, left of mute) ─────────────────
-    const shopBtnBg = this.add.rectangle(1024 - 100, 28, 50, 28, 0x886600, 0.9)
-      .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
-    this.add.text(1024 - 100, 28, 'Shop', {
-      fontSize: '14px', color: '#FFD700', fontStyle: 'bold',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
-    shopBtnBg.on('pointerdown', () => this.toggleShop());
+    // ── Shop buttons ─────────────────────────────────────────
+    if (this.twoPlayer) {
+      // P1 shop button
+      const p1ShopBg = this.add.rectangle(512 - 100, 28, 50, 28, 0x886600, 0.9)
+        .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+      const p1ShopLabel = this.add.text(512 - 100, 28, 'Shop', {
+        fontSize: '14px', color: '#FFD700', fontStyle: 'bold',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+      p1ShopBg.on('pointerdown', (pointer) => {
+        if (pointer.x >= 512) return;
+        this.toggleShop('p1');
+      });
+      this.p1HudElements.push(p1ShopBg, p1ShopLabel);
+
+      // P2 shop button
+      const p2ShopBg = this.add.rectangle(512 - 100, 28, 50, 28, 0x886600, 0.9)
+        .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+      const p2ShopLabel = this.add.text(512 - 100, 28, 'Shop', {
+        fontSize: '14px', color: '#FFD700', fontStyle: 'bold',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+      p2ShopBg.on('pointerdown', (pointer) => {
+        if (pointer.x < 512) return;
+        this.toggleShop('p2');
+      });
+      this.p2HudElements.push(p2ShopBg, p2ShopLabel);
+    } else {
+      const shopBtnBg = this.add.rectangle(1024 - 100, 28, 50, 28, 0x886600, 0.9)
+        .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+      this.add.text(1024 - 100, 28, 'Shop', {
+        fontSize: '14px', color: '#FFD700', fontStyle: 'bold',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+      shopBtnBg.on('pointerdown', () => this.toggleShop());
+    }
 
     // ── Age name + Difficulty label (HUD) ────────────────────
-    this.add.text(16, 72, `${this.ageConfig.name} - ${this.difficulty.label}`, {
+    const ageLabel = this.add.text(16, 72, `${this.ageConfig.name} - ${this.difficulty.label}`, {
       fontSize: '13px', color: '#ffffff',
       stroke: '#000000', strokeThickness: 2,
     }).setScrollFactor(0).setDepth(20);
+    if (this.twoPlayer) this.p1HudElements.push(ageLabel);
 
     // ── Sound effects ─────────────────────────────────────────
     this.sfx = new SoundFX(() => this.sound.mute);
@@ -249,51 +362,138 @@ export class GameScene extends Phaser.Scene {
     // ── Mobile camera buttons ─────────────────────────────────
     this.camLeft = false;
     this.camRight = false;
+    this.p2CamLeft = false;
+    this.p2CamRight = false;
 
-    const arrowBtnSize = 56;
-    const arrowY = 576 - arrowBtnSize / 2 - 60;
-    const arrowLeftX = arrowBtnSize / 2 + 12;
-    const arrowRightX = arrowLeftX + arrowBtnSize + 10;
+    if (this.twoPlayer) {
+      // P1 on-screen arrows (left viewport)
+      const arrowBtnSize = 44;
+      const arrowY = 576 - arrowBtnSize / 2 - 60;
+      const p1LeftX = arrowBtnSize / 2 + 8;
+      const p1RightX = p1LeftX + arrowBtnSize + 6;
 
-    const leftBtn = this.add.rectangle(arrowLeftX, arrowY, arrowBtnSize, arrowBtnSize, 0x000000, 0.4)
-      .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
-    this.add.text(arrowLeftX, arrowY, '◀', { fontSize: '28px', color: '#ffffff' })
-      .setOrigin(0.5).setScrollFactor(0).setDepth(21);
+      const p1Left = this.add.rectangle(p1LeftX, arrowY, arrowBtnSize, arrowBtnSize, 0x000000, 0.4)
+        .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+      const p1LeftLabel = this.add.text(p1LeftX, arrowY, '◀', { fontSize: '22px', color: '#ffffff' })
+        .setOrigin(0.5).setScrollFactor(0).setDepth(21);
+      const p1Right = this.add.rectangle(p1RightX, arrowY, arrowBtnSize, arrowBtnSize, 0x000000, 0.4)
+        .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+      const p1RightLabel = this.add.text(p1RightX, arrowY, '▶', { fontSize: '22px', color: '#ffffff' })
+        .setOrigin(0.5).setScrollFactor(0).setDepth(21);
 
-    const rightBtn = this.add.rectangle(arrowRightX, arrowY, arrowBtnSize, arrowBtnSize, 0x000000, 0.4)
-      .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
-    this.add.text(arrowRightX, arrowY, '▶', { fontSize: '28px', color: '#ffffff' })
-      .setOrigin(0.5).setScrollFactor(0).setDepth(21);
+      p1Left.on('pointerdown', (pointer) => { if (pointer.x < 512) this.camLeft = true; });
+      p1Left.on('pointerup', () => { this.camLeft = false; });
+      p1Left.on('pointerout', () => { this.camLeft = false; });
+      p1Right.on('pointerdown', (pointer) => { if (pointer.x < 512) this.camRight = true; });
+      p1Right.on('pointerup', () => { this.camRight = false; });
+      p1Right.on('pointerout', () => { this.camRight = false; });
+      this.p1HudElements.push(p1Left, p1LeftLabel, p1Right, p1RightLabel);
 
-    leftBtn.on('pointerdown', () => { this.camLeft = true; });
-    leftBtn.on('pointerup', () => { this.camLeft = false; });
-    leftBtn.on('pointerout', () => { this.camLeft = false; });
+      // P2 on-screen arrows (right viewport)
+      const p2LeftX = arrowBtnSize / 2 + 8;
+      const p2RightX = p2LeftX + arrowBtnSize + 6;
+      const p2Left = this.add.rectangle(p2LeftX, arrowY, arrowBtnSize, arrowBtnSize, 0x000000, 0.4)
+        .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+      const p2LeftLabel = this.add.text(p2LeftX, arrowY, '◀', { fontSize: '22px', color: '#ffffff' })
+        .setOrigin(0.5).setScrollFactor(0).setDepth(21);
+      const p2Right = this.add.rectangle(p2RightX, arrowY, arrowBtnSize, arrowBtnSize, 0x000000, 0.4)
+        .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+      const p2RightLabel = this.add.text(p2RightX, arrowY, '▶', { fontSize: '22px', color: '#ffffff' })
+        .setOrigin(0.5).setScrollFactor(0).setDepth(21);
 
-    rightBtn.on('pointerdown', () => { this.camRight = true; });
-    rightBtn.on('pointerup', () => { this.camRight = false; });
-    rightBtn.on('pointerout', () => { this.camRight = false; });
+      p2Left.on('pointerdown', (pointer) => { if (pointer.x >= 512) this.p2CamLeft = true; });
+      p2Left.on('pointerup', () => { this.p2CamLeft = false; });
+      p2Left.on('pointerout', () => { this.p2CamLeft = false; });
+      p2Right.on('pointerdown', (pointer) => { if (pointer.x >= 512) this.p2CamRight = true; });
+      p2Right.on('pointerup', () => { this.p2CamRight = false; });
+      p2Right.on('pointerout', () => { this.p2CamRight = false; });
+      this.p2HudElements.push(p2Left, p2LeftLabel, p2Right, p2RightLabel);
+    } else {
+      const arrowBtnSize = 56;
+      const arrowY = 576 - arrowBtnSize / 2 - 60;
+      const arrowLeftX = arrowBtnSize / 2 + 12;
+      const arrowRightX = arrowLeftX + arrowBtnSize + 10;
+
+      const leftBtn = this.add.rectangle(arrowLeftX, arrowY, arrowBtnSize, arrowBtnSize, 0x000000, 0.4)
+        .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+      this.add.text(arrowLeftX, arrowY, '◀', { fontSize: '28px', color: '#ffffff' })
+        .setOrigin(0.5).setScrollFactor(0).setDepth(21);
+
+      const rightBtn = this.add.rectangle(arrowRightX, arrowY, arrowBtnSize, arrowBtnSize, 0x000000, 0.4)
+        .setScrollFactor(0).setDepth(20).setInteractive({ useHandCursor: true });
+      this.add.text(arrowRightX, arrowY, '▶', { fontSize: '28px', color: '#ffffff' })
+        .setOrigin(0.5).setScrollFactor(0).setDepth(21);
+
+      leftBtn.on('pointerdown', () => { this.camLeft = true; });
+      leftBtn.on('pointerup', () => { this.camLeft = false; });
+      leftBtn.on('pointerout', () => { this.camLeft = false; });
+
+      rightBtn.on('pointerdown', () => { this.camRight = true; });
+      rightBtn.on('pointerup', () => { this.camRight = false; });
+      rightBtn.on('pointerout', () => { this.camRight = false; });
+    }
 
     // ── Minimap ──────────────────────────────────────────────
-    const mmW = 180;
-    const mmH = 24;
-    const mmX = 1024 - mmW - 12;
-    const mmY = 576 - mmH - 12;
-    this.minimapBg = this.add.rectangle(mmX + mmW / 2, mmY + mmH / 2, mmW, mmH, 0x000000, 0.5)
-      .setScrollFactor(0).setDepth(20);
-    // Viewport indicator
-    const vpW = (1024 / GAME_W) * mmW;
-    this.minimapVP = this.add.rectangle(mmX + vpW / 2, mmY + mmH / 2, vpW, mmH - 2, 0xffffff, 0.3)
-      .setScrollFactor(0).setDepth(21);
-    // Base markers — use age colors
-    const basePlayerX = mmX + (60 / GAME_W) * mmW;
-    const baseEnemyX = mmX + ((GAME_W - 60) / GAME_W) * mmW;
-    this.add.rectangle(basePlayerX, mmY + mmH / 2, 4, mmH - 4, this.ageConfig.baseColors.player)
-      .setScrollFactor(0).setDepth(22);
-    this.add.rectangle(baseEnemyX, mmY + mmH / 2, 4, mmH - 4, this.ageConfig.baseColors.enemy)
-      .setScrollFactor(0).setDepth(22);
-    // Graphics layer for unit dots
-    this.minimapGfx = this.add.graphics().setScrollFactor(0).setDepth(22);
-    this.minimapPos = { x: mmX, y: mmY, w: mmW, h: mmH };
+    if (this.twoPlayer) {
+      // P1 minimap (smaller, bottom of left viewport)
+      const p1mmW = 120;
+      const p1mmH = 20;
+      const p1mmX = 512 - p1mmW - 8;
+      const p1mmY = 576 - p1mmH - 8;
+      this.p1MinimapBg = this.add.rectangle(p1mmX + p1mmW / 2, p1mmY + p1mmH / 2, p1mmW, p1mmH, 0x000000, 0.5)
+        .setScrollFactor(0).setDepth(20);
+      const p1vpW = (512 / GAME_W) * p1mmW;
+      this.p1MinimapVP = this.add.rectangle(p1mmX + p1vpW / 2, p1mmY + p1mmH / 2, p1vpW, p1mmH - 2, 0xffffff, 0.3)
+        .setScrollFactor(0).setDepth(21);
+      this.add.rectangle(p1mmX + (60 / GAME_W) * p1mmW, p1mmY + p1mmH / 2, 3, p1mmH - 4, this.ageConfig.baseColors.player)
+        .setScrollFactor(0).setDepth(22);
+      this.add.rectangle(p1mmX + ((GAME_W - 60) / GAME_W) * p1mmW, p1mmY + p1mmH / 2, 3, p1mmH - 4, this.ageConfig.baseColors.enemy)
+        .setScrollFactor(0).setDepth(22);
+      this.p1MinimapGfx = this.add.graphics().setScrollFactor(0).setDepth(22);
+      this.p1MinimapPos = { x: p1mmX, y: p1mmY, w: p1mmW, h: p1mmH };
+      this.p1HudElements.push(this.p1MinimapBg, this.p1MinimapVP, this.p1MinimapGfx);
+
+      // P2 minimap
+      const p2mmW = 120;
+      const p2mmH = 20;
+      const p2mmX = 512 - p2mmW - 8;
+      const p2mmY = 576 - p2mmH - 8;
+      this.p2MinimapBg = this.add.rectangle(p2mmX + p2mmW / 2, p2mmY + p2mmH / 2, p2mmW, p2mmH, 0x000000, 0.5)
+        .setScrollFactor(0).setDepth(20);
+      const p2vpW = (512 / GAME_W) * p2mmW;
+      this.p2MinimapVP = this.add.rectangle(p2mmX + p2vpW / 2, p2mmY + p2mmH / 2, p2vpW, p2mmH - 2, 0xffffff, 0.3)
+        .setScrollFactor(0).setDepth(21);
+      this.add.rectangle(p2mmX + (60 / GAME_W) * p2mmW, p2mmY + p2mmH / 2, 3, p2mmH - 4, this.ageConfig.baseColors.player)
+        .setScrollFactor(0).setDepth(22);
+      this.add.rectangle(p2mmX + ((GAME_W - 60) / GAME_W) * p2mmW, p2mmY + p2mmH / 2, 3, p2mmH - 4, this.ageConfig.baseColors.enemy)
+        .setScrollFactor(0).setDepth(22);
+      this.p2MinimapGfx = this.add.graphics().setScrollFactor(0).setDepth(22);
+      this.p2MinimapPos = { x: p2mmX, y: p2mmY, w: p2mmW, h: p2mmH };
+      this.p2HudElements.push(this.p2MinimapBg, this.p2MinimapVP, this.p2MinimapGfx);
+
+      // Use p1 minimap as default for compatibility
+      this.minimapPos = this.p1MinimapPos;
+      this.minimapVP = this.p1MinimapVP;
+      this.minimapGfx = this.p1MinimapGfx;
+    } else {
+      const mmW = 180;
+      const mmH = 24;
+      const mmX = 1024 - mmW - 12;
+      const mmY = 576 - mmH - 12;
+      this.minimapBg = this.add.rectangle(mmX + mmW / 2, mmY + mmH / 2, mmW, mmH, 0x000000, 0.5)
+        .setScrollFactor(0).setDepth(20);
+      const vpW = (1024 / GAME_W) * mmW;
+      this.minimapVP = this.add.rectangle(mmX + vpW / 2, mmY + mmH / 2, vpW, mmH - 2, 0xffffff, 0.3)
+        .setScrollFactor(0).setDepth(21);
+      const basePlayerX = mmX + (60 / GAME_W) * mmW;
+      const baseEnemyX = mmX + ((GAME_W - 60) / GAME_W) * mmW;
+      this.add.rectangle(basePlayerX, mmY + mmH / 2, 4, mmH - 4, this.ageConfig.baseColors.player)
+        .setScrollFactor(0).setDepth(22);
+      this.add.rectangle(baseEnemyX, mmY + mmH / 2, 4, mmH - 4, this.ageConfig.baseColors.enemy)
+        .setScrollFactor(0).setDepth(22);
+      this.minimapGfx = this.add.graphics().setScrollFactor(0).setDepth(22);
+      this.minimapPos = { x: mmX, y: mmY, w: mmW, h: mmH };
+    }
 
     // ── Game-over flag ──────────────────────────────────────
     this.gameOver = false;
@@ -307,6 +507,11 @@ export class GameScene extends Phaser.Scene {
     this.shopElements = [];
     this.shopCooldownTimer = null;
     this.activeBuffsText = null;
+    if (this.twoPlayer) {
+      this.p2ShopOpen = false;
+      this.p2ShopElements = [];
+      this.p2ShopCooldownTimer = null;
+    }
 
     // ── Weather ────────────────────────────────────────────────
     this.weather = Phaser.Utils.Array.GetRandom(WEATHER_TYPES);
@@ -319,6 +524,15 @@ export class GameScene extends Phaser.Scene {
       fontSize: '13px', color: '#dddddd',
       stroke: '#000000', strokeThickness: 2,
     }).setScrollFactor(0).setDepth(20);
+    if (this.twoPlayer) this.p1HudElements.push(this.weatherText);
+
+    // ── 2P Camera ignore setup ───────────────────────────────
+    if (this.twoPlayer) {
+      // P2 camera ignores P1 HUD
+      this.p1HudElements.forEach((el) => this.p2Camera.ignore(el));
+      // P1 camera ignores P2 HUD
+      this.p2HudElements.forEach((el) => this.cameras.main.ignore(el));
+    }
   }
 
   // ── Cleanup textures/anims for age switching ────────────────
@@ -1573,6 +1787,52 @@ export class GameScene extends Phaser.Scene {
     e.hpBar = this.add.rectangle(e.x, e.y - type.height / 2 - 6, type.width, 4, 0xff0000).setDepth(11);
   }
 
+  spawnP2Unit(type) {
+    if (this.gameOver) return;
+    if (this.p2Gold < type.cost) { this.sfx.errorBuzz(); return; }
+    this.p2Gold -= type.cost;
+    this.sfx.enemySpawn();
+    this.updateP2GoldText();
+
+    const spawnY = type.name === 'Bird' ? GROUND_Y - type.height / 2 - 20 : GROUND_Y - type.height / 2;
+    const e = this.add.sprite(GAME_W - 100, spawnY, textureKey(type.name, 'enemy', 'idle')).setDepth(10);
+    e.setFlipX(true);
+    this.physics.add.existing(e);
+    e.body.setSize(type.width, type.height);
+    e.body.setOffset(8, 4);
+    e.body.setCollideWorldBounds(true);
+    if (type.name === 'Bird') e.body.setAllowGravity(false);
+    this.enemies.add(e);
+
+    e.hp = type.hp;
+    e.maxHp = type.hp;
+    e.attacking = false;
+    e.attackTarget = null;
+    e.speed = type.speed * this.p2SpeedMultiplier * this.weather.speedMult;
+    const dmgMult = type.name === 'Archer' ? this.weather.archerDmgMult : this.weather.dmgMult;
+    e.damage = type.damage * dmgMult;
+    e.faction = 'enemy';
+    e.unitCost = type.cost;
+    e.unitWidth = type.width;
+    e.unitHeight = type.height;
+    e.unitTypeName = type.name;
+    e.animState = 'walk';
+    e.play(animKey(type.name, 'enemy', 'walk'));
+
+    e.blockReduction = type.blockReduction;
+    e.blockDuration = type.blockDuration;
+    e.blockCooldown = type.blockCooldown;
+    e.blocking = false;
+    e.blockTimer = 0;
+    e.blockCooldownTimer = type.blockReduction > 0 ? type.blockCooldown : 0;
+
+    e.hpBar = this.add.rectangle(e.x, e.y - type.height / 2 - 6, type.width, 4, 0xff0000).setDepth(11);
+  }
+
+  updateP2GoldText() {
+    if (this.p2GoldText) this.p2GoldText.setText(`Gold: ${this.p2Gold}`);
+  }
+
   // ── Combat ──────────────────────────────────────────────────
   unitFight(warrior, enemy) {
     if (warrior.dying || enemy.dying) return;
@@ -1639,10 +1899,25 @@ export class GameScene extends Phaser.Scene {
 
     // ── Camera panning (keyboard + on-screen buttons) ────────
     const camSpeed = 400;
-    if (this.cursors.left.isDown || this.camLeft) {
-      this.cameras.main.scrollX -= camSpeed * dt;
-    } else if (this.cursors.right.isDown || this.camRight) {
-      this.cameras.main.scrollX += camSpeed * dt;
+    if (this.twoPlayer) {
+      // P1: A/D keys or on-screen arrows
+      if (this.keyA.isDown || this.camLeft) {
+        this.cameras.main.scrollX -= camSpeed * dt;
+      } else if (this.keyD.isDown || this.camRight) {
+        this.cameras.main.scrollX += camSpeed * dt;
+      }
+      // P2: Arrow keys or on-screen arrows
+      if (this.cursors.left.isDown || this.p2CamLeft) {
+        this.p2Camera.scrollX -= camSpeed * dt;
+      } else if (this.cursors.right.isDown || this.p2CamRight) {
+        this.p2Camera.scrollX += camSpeed * dt;
+      }
+    } else {
+      if (this.cursors.left.isDown || this.camLeft) {
+        this.cameras.main.scrollX -= camSpeed * dt;
+      } else if (this.cursors.right.isDown || this.camRight) {
+        this.cameras.main.scrollX += camSpeed * dt;
+      }
     }
 
     // ── Ability cooldowns ─────────────────────────────────────
@@ -1650,6 +1925,14 @@ export class GameScene extends Phaser.Scene {
       if (this.abilityCooldowns[id] > 0) {
         this.abilityCooldowns[id] -= dt;
         if (this.abilityCooldowns[id] < 0) this.abilityCooldowns[id] = 0;
+      }
+    }
+    if (this.twoPlayer) {
+      for (const id in this.p2AbilityCooldowns) {
+        if (this.p2AbilityCooldowns[id] > 0) {
+          this.p2AbilityCooldowns[id] -= dt;
+          if (this.p2AbilityCooldowns[id] < 0) this.p2AbilityCooldowns[id] = 0;
+        }
       }
     }
 
@@ -1698,7 +1981,7 @@ export class GameScene extends Phaser.Scene {
         this.accumulateDamage(this.enemyBase, dmg, time);
         this.enemyHPText.setText(`HP: ${Math.ceil(Math.max(0, this.enemyBaseHP))}`);
         if (time - this.lastBaseDamageTime > 300) { this.lastBaseDamageTime = time; this.sfx.baseDamage(); }
-        if (this.enemyBaseHP <= 0) this.endGame('You Win!');
+        if (this.enemyBaseHP <= 0) this.endGame(this.twoPlayer ? 'Player 1 Wins!' : 'You Win!');
       } else {
         w.body.setVelocityX(w.speed);
       }
@@ -1746,7 +2029,7 @@ export class GameScene extends Phaser.Scene {
         this.accumulateDamage(this.playerBase, dmg, time);
         this.playerHPText.setText(`HP: ${Math.ceil(Math.max(0, this.playerBaseHP))}`);
         if (time - this.lastBaseDamageTime > 300) { this.lastBaseDamageTime = time; this.sfx.baseDamage(); }
-        if (this.playerBaseHP <= 0) this.endGame('Game Over');
+        if (this.playerBaseHP <= 0) this.endGame(this.twoPlayer ? 'Player 2 Wins!' : 'Game Over');
       } else {
         e.body.setVelocityX(-e.speed);
       }
@@ -1764,24 +2047,66 @@ export class GameScene extends Phaser.Scene {
     });
 
     // ── Update minimap ─────────────────────────────────────────
-    const mm = this.minimapPos;
-    const vpW = (1024 / GAME_W) * mm.w;
-    const vpX = mm.x + (this.cameras.main.scrollX / GAME_W) * mm.w + vpW / 2;
-    this.minimapVP.setPosition(vpX, mm.y + mm.h / 2);
+    if (this.twoPlayer) {
+      // P1 minimap
+      const p1mm = this.p1MinimapPos;
+      const p1vpW = (512 / GAME_W) * p1mm.w;
+      const p1vpX = p1mm.x + (this.cameras.main.scrollX / GAME_W) * p1mm.w + p1vpW / 2;
+      this.p1MinimapVP.setPosition(p1vpX, p1mm.y + p1mm.h / 2);
 
-    this.minimapGfx.clear();
-    this.warriors.getChildren().forEach((w) => {
-      if (!w.active) return;
-      const dotX = mm.x + (w.x / GAME_W) * mm.w;
-      this.minimapGfx.fillStyle(this.ageConfig.baseColors.player, 1);
-      this.minimapGfx.fillCircle(dotX, mm.y + mm.h / 2, 2);
-    });
-    this.enemies.getChildren().forEach((e) => {
-      if (!e.active) return;
-      const dotX = mm.x + (e.x / GAME_W) * mm.w;
-      this.minimapGfx.fillStyle(this.ageConfig.baseColors.enemy, 1);
-      this.minimapGfx.fillCircle(dotX, mm.y + mm.h / 2, 2);
-    });
+      this.p1MinimapGfx.clear();
+      this.warriors.getChildren().forEach((w) => {
+        if (!w.active) return;
+        const dotX = p1mm.x + (w.x / GAME_W) * p1mm.w;
+        this.p1MinimapGfx.fillStyle(this.ageConfig.baseColors.player, 1);
+        this.p1MinimapGfx.fillCircle(dotX, p1mm.y + p1mm.h / 2, 2);
+      });
+      this.enemies.getChildren().forEach((e) => {
+        if (!e.active) return;
+        const dotX = p1mm.x + (e.x / GAME_W) * p1mm.w;
+        this.p1MinimapGfx.fillStyle(this.ageConfig.baseColors.enemy, 1);
+        this.p1MinimapGfx.fillCircle(dotX, p1mm.y + p1mm.h / 2, 2);
+      });
+
+      // P2 minimap
+      const p2mm = this.p2MinimapPos;
+      const p2vpW = (512 / GAME_W) * p2mm.w;
+      const p2vpX = p2mm.x + (this.p2Camera.scrollX / GAME_W) * p2mm.w + p2vpW / 2;
+      this.p2MinimapVP.setPosition(p2vpX, p2mm.y + p2mm.h / 2);
+
+      this.p2MinimapGfx.clear();
+      this.warriors.getChildren().forEach((w) => {
+        if (!w.active) return;
+        const dotX = p2mm.x + (w.x / GAME_W) * p2mm.w;
+        this.p2MinimapGfx.fillStyle(this.ageConfig.baseColors.player, 1);
+        this.p2MinimapGfx.fillCircle(dotX, p2mm.y + p2mm.h / 2, 2);
+      });
+      this.enemies.getChildren().forEach((e) => {
+        if (!e.active) return;
+        const dotX = p2mm.x + (e.x / GAME_W) * p2mm.w;
+        this.p2MinimapGfx.fillStyle(this.ageConfig.baseColors.enemy, 1);
+        this.p2MinimapGfx.fillCircle(dotX, p2mm.y + p2mm.h / 2, 2);
+      });
+    } else {
+      const mm = this.minimapPos;
+      const vpW = (1024 / GAME_W) * mm.w;
+      const vpX = mm.x + (this.cameras.main.scrollX / GAME_W) * mm.w + vpW / 2;
+      this.minimapVP.setPosition(vpX, mm.y + mm.h / 2);
+
+      this.minimapGfx.clear();
+      this.warriors.getChildren().forEach((w) => {
+        if (!w.active) return;
+        const dotX = mm.x + (w.x / GAME_W) * mm.w;
+        this.minimapGfx.fillStyle(this.ageConfig.baseColors.player, 1);
+        this.minimapGfx.fillCircle(dotX, mm.y + mm.h / 2, 2);
+      });
+      this.enemies.getChildren().forEach((e) => {
+        if (!e.active) return;
+        const dotX = mm.x + (e.x / GAME_W) * mm.w;
+        this.minimapGfx.fillStyle(this.ageConfig.baseColors.enemy, 1);
+        this.minimapGfx.fillCircle(dotX, mm.y + mm.h / 2, 2);
+      });
+    }
 
     // ── Base damage stage transitions ─────────────────────────
     const pStage = this.playerBaseHP > this.maxPlayerBaseHP * 0.66 ? 0
@@ -1841,12 +2166,16 @@ export class GameScene extends Phaser.Scene {
     if (unit.hpBar) unit.hpBar.destroy();
     if (unit.shieldIcon) unit.shieldIcon.destroy();
     this.sfx.unitDeath();
-    // Award gold for killing enemies (cost / 5)
+    // Award gold for killing units (cost / 5)
     if (unit.faction === 'enemy') {
       this.gold += Math.floor(unit.unitCost / 5);
       this.sfx.coinChime();
+      this.updateGoldText();
+    } else if (unit.faction === 'player' && this.twoPlayer) {
+      this.p2Gold += Math.floor(unit.unitCost / 5);
+      this.sfx.coinChime();
+      this.updateP2GoldText();
     }
-    this.updateGoldText();
 
     // Remove from physics group immediately to stop combat callbacks
     if (unit.faction === 'player') {
@@ -1875,48 +2204,62 @@ export class GameScene extends Phaser.Scene {
 
   // ── Shop ──────────────────────────────────────────────────
 
-  toggleShop() {
+  toggleShop(player) {
     if (this.gameOver) return;
-    if (this.shopOpen) {
-      this.closeShop();
+    if (this.twoPlayer && player === 'p2') {
+      if (this.p2ShopOpen) {
+        this.closeShop('p2');
+      } else {
+        this.openShop('p2');
+      }
     } else {
-      this.openShop();
+      if (this.shopOpen) {
+        this.closeShop('p1');
+      } else {
+        this.openShop('p1');
+      }
     }
   }
 
-  openShop() {
-    this.shopOpen = true;
-    this.shopElements = [];
+  openShop(player = 'p1') {
+    const isP2 = this.twoPlayer && player === 'p2';
+    const gold = isP2 ? this.p2Gold : this.gold;
+    const passives = isP2 ? this.p2PurchasedPassives : this.purchasedPassives;
+    const cooldowns = isP2 ? this.p2AbilityCooldowns : this.abilityCooldowns;
+    const elements = isP2 ? 'p2ShopElements' : 'shopElements';
 
-    // Backdrop — blocks clicks to game underneath
-    const backdrop = this.add.rectangle(512, 288, 1024, 576, 0x000000, 0.5)
-      .setScrollFactor(0).setDepth(29).setInteractive();
-    backdrop.on('pointerdown', () => this.closeShop());
-    this.shopElements.push(backdrop);
+    if (isP2) { this.p2ShopOpen = true; } else { this.shopOpen = true; }
+    this[elements] = [];
 
-    // Panel
-    const panelW = 460;
-    const panelH = 380;
-    const panelX = 512;
+    // Panel position: center of the relevant viewport
+    const panelX = this.twoPlayer ? 256 : 512;
     const panelY = 288;
+    const panelW = this.twoPlayer ? 400 : 460;
+    const panelH = 380;
+    const backdropW = this.twoPlayer ? 512 : 1024;
+
+    // Backdrop
+    const backdrop = this.add.rectangle(panelX, panelY, backdropW, 576, 0x000000, 0.5)
+      .setScrollFactor(0).setDepth(29).setInteractive();
+    backdrop.on('pointerdown', () => this.closeShop(player));
+    this[elements].push(backdrop);
 
     const panel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x1a1a2e, 0.95)
       .setScrollFactor(0).setDepth(30).setStrokeStyle(2, 0xffd700);
-    panel.setInteractive(); // prevent click-through to backdrop
-    this.shopElements.push(panel);
+    panel.setInteractive();
+    this[elements].push(panel);
 
-    // Title
-    const title = this.add.text(panelX, panelY - panelH / 2 + 25, 'ABILITIES SHOP', {
+    const titleText = isP2 ? 'P2 ABILITIES' : (this.twoPlayer ? 'P1 ABILITIES' : 'ABILITIES SHOP');
+    const title = this.add.text(panelX, panelY - panelH / 2 + 25, titleText, {
       fontSize: '20px', color: '#FFD700', fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(31);
-    this.shopElements.push(title);
+    this[elements].push(title);
 
-    // Close button
     const closeBtn = this.add.text(panelX + panelW / 2 - 20, panelY - panelH / 2 + 10, 'X', {
       fontSize: '18px', color: '#ff4444', fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(32).setInteractive({ useHandCursor: true });
-    closeBtn.on('pointerdown', () => this.closeShop());
-    this.shopElements.push(closeBtn);
+    closeBtn.on('pointerdown', () => this.closeShop(player));
+    this[elements].push(closeBtn);
 
     // Ability rows
     const rowStartY = panelY - panelH / 2 + 70;
@@ -1926,30 +2269,25 @@ export class GameScene extends Phaser.Scene {
       const rowY = rowStartY + i * rowH;
       const leftX = panelX - panelW / 2 + 20;
 
-      // Color icon
       const icon = this.add.rectangle(leftX + 15, rowY + 15, 26, 26, ability.color)
         .setScrollFactor(0).setDepth(31);
-      this.shopElements.push(icon);
+      this[elements].push(icon);
 
-      // Name
       const nameText = this.add.text(leftX + 38, rowY, ability.name, {
         fontSize: '15px', color: '#ffffff', fontStyle: 'bold',
       }).setScrollFactor(0).setDepth(31);
-      this.shopElements.push(nameText);
+      this[elements].push(nameText);
 
-      // Description
       const descText = this.add.text(leftX + 38, rowY + 20, ability.description, {
         fontSize: '12px', color: '#aaaaaa',
       }).setScrollFactor(0).setDepth(31);
-      this.shopElements.push(descText);
+      this[elements].push(descText);
 
-      // Cost
       const costText = this.add.text(leftX + 38, rowY + 38, `${ability.cost}g`, {
         fontSize: '12px', color: '#FFD700',
       }).setScrollFactor(0).setDepth(31);
-      this.shopElements.push(costText);
+      this[elements].push(costText);
 
-      // Button
       const btnX = panelX + panelW / 2 - 60;
       const btnY = rowY + 18;
 
@@ -1957,18 +2295,18 @@ export class GameScene extends Phaser.Scene {
       let btnColor = 0x228822;
       let clickable = true;
 
-      if (ability.type === 'passive' && this.purchasedPassives.has(ability.id)) {
+      if (ability.type === 'passive' && passives.has(ability.id)) {
         btnLabel = 'OWNED';
         btnColor = 0x555555;
         clickable = false;
-      } else if (this.abilityCooldowns[ability.id] && this.abilityCooldowns[ability.id] > 0) {
-        btnLabel = `${Math.ceil(this.abilityCooldowns[ability.id])}s`;
+      } else if (cooldowns[ability.id] && cooldowns[ability.id] > 0) {
+        btnLabel = `${Math.ceil(cooldowns[ability.id])}s`;
         btnColor = 0x555555;
         clickable = false;
-      } else if (this.gold < ability.cost) {
+      } else if (gold < ability.cost) {
         btnLabel = ability.type === 'passive' ? 'BUY' : 'USE';
         btnColor = 0x661111;
-        clickable = true; // will show error buzz
+        clickable = true;
       } else {
         btnLabel = ability.type === 'passive' ? 'BUY' : 'USE';
         btnColor = 0x228822;
@@ -1976,140 +2314,200 @@ export class GameScene extends Phaser.Scene {
 
       const btnBg = this.add.rectangle(btnX, btnY, 70, 30, btnColor, 0.9)
         .setScrollFactor(0).setDepth(31).setInteractive({ useHandCursor: clickable });
-      this.shopElements.push(btnBg);
+      this[elements].push(btnBg);
 
       const btnText = this.add.text(btnX, btnY, btnLabel, {
         fontSize: '13px', color: '#ffffff', fontStyle: 'bold',
       }).setOrigin(0.5).setScrollFactor(0).setDepth(32);
-      this.shopElements.push(btnText);
+      this[elements].push(btnText);
 
       if (clickable) {
-        btnBg.on('pointerdown', () => this.purchaseAbility(ability));
+        btnBg.on('pointerdown', () => this.purchaseAbility(ability, player));
       }
     });
 
-    // Refresh timer — rebuilds panel every second while open to update cooldowns/gold
-    this.shopCooldownTimer = this.time.addEvent({
+    // In 2P, make the other camera ignore shop elements
+    if (this.twoPlayer) {
+      const ignoreCamera = isP2 ? this.cameras.main : this.p2Camera;
+      this[elements].forEach((el) => ignoreCamera.ignore(el));
+    }
+
+    // Refresh timer
+    const timerKey = isP2 ? 'p2ShopCooldownTimer' : 'shopCooldownTimer';
+    this[timerKey] = this.time.addEvent({
       delay: 1000,
       loop: true,
       callback: () => {
-        if (this.shopOpen) {
-          this.closeShop();
-          this.openShop();
+        const isOpen = isP2 ? this.p2ShopOpen : this.shopOpen;
+        if (isOpen) {
+          this.closeShop(player);
+          this.openShop(player);
         }
       },
     });
   }
 
-  closeShop() {
-    this.shopOpen = false;
-    this.shopElements.forEach((el) => el.destroy());
-    this.shopElements = [];
-    if (this.shopCooldownTimer) {
-      this.shopCooldownTimer.destroy();
-      this.shopCooldownTimer = null;
+  closeShop(player = 'p1') {
+    const isP2 = this.twoPlayer && player === 'p2';
+    const elements = isP2 ? 'p2ShopElements' : 'shopElements';
+    const timerKey = isP2 ? 'p2ShopCooldownTimer' : 'shopCooldownTimer';
+
+    if (isP2) { this.p2ShopOpen = false; } else { this.shopOpen = false; }
+    if (this[elements]) {
+      this[elements].forEach((el) => el.destroy());
+      this[elements] = [];
+    }
+    if (this[timerKey]) {
+      this[timerKey].destroy();
+      this[timerKey] = null;
     }
   }
 
-  purchaseAbility(ability) {
+  purchaseAbility(ability, player = 'p1') {
     if (this.gameOver) return;
+    const isP2 = this.twoPlayer && player === 'p2';
+    const gold = isP2 ? this.p2Gold : this.gold;
+    const passives = isP2 ? this.p2PurchasedPassives : this.purchasedPassives;
+    const cooldowns = isP2 ? this.p2AbilityCooldowns : this.abilityCooldowns;
 
-    // Check if passive already owned
-    if (ability.type === 'passive' && this.purchasedPassives.has(ability.id)) return;
+    if (ability.type === 'passive' && passives.has(ability.id)) return;
+    if (cooldowns[ability.id] && cooldowns[ability.id] > 0) return;
 
-    // Check cooldown
-    if (this.abilityCooldowns[ability.id] && this.abilityCooldowns[ability.id] > 0) return;
-
-    // Check gold
-    if (this.gold < ability.cost) {
+    if (gold < ability.cost) {
       this.sfx.errorBuzz();
       return;
     }
 
-    this.gold -= ability.cost;
-    this.updateGoldText();
+    if (isP2) {
+      this.p2Gold -= ability.cost;
+      this.updateP2GoldText();
+    } else {
+      this.gold -= ability.cost;
+      this.updateGoldText();
+    }
     this.sfx.abilityPurchase();
 
-    this.applyAbility(ability);
+    this.applyAbility(ability, player);
 
-    // Refresh shop UI
-    this.closeShop();
-    this.openShop();
+    this.closeShop(player);
+    this.openShop(player);
   }
 
-  applyAbility(ability) {
+  applyAbility(ability, player = 'p1') {
+    const isP2 = this.twoPlayer && player === 'p2';
     switch (ability.id) {
-      case 'rainOfArrows': this.applyRainOfArrows(ability); break;
-      case 'healBase':     this.applyHealBase(ability);     break;
-      case 'warDrums':     this.applyWarDrums(ability);     break;
-      case 'goldMine':     this.applyGoldMine(ability);     break;
+      case 'rainOfArrows': this.applyRainOfArrows(ability, isP2); break;
+      case 'healBase':     this.applyHealBase(ability, isP2);     break;
+      case 'warDrums':     this.applyWarDrums(ability, isP2);     break;
+      case 'goldMine':     this.applyGoldMine(ability, isP2);     break;
     }
   }
 
-  applyRainOfArrows(ability) {
-    this.abilityCooldowns[ability.id] = ability.cooldown;
+  applyRainOfArrows(ability, isP2 = false) {
+    const cooldowns = isP2 ? this.p2AbilityCooldowns : this.abilityCooldowns;
+    cooldowns[ability.id] = ability.cooldown;
     this.sfx.rainOfArrows();
     this.cameras.main.flash(300, 255, 100, 100);
 
-    this.enemies.getChildren().forEach((e) => {
-      if (!e.active || e.dying) return;
-      e.hp -= 30;
-      this.showDamageNumber(e.x, e.y - e.unitHeight / 2, 30, '#ff4444');
-      if (e.hp <= 0) this.killUnit(e);
+    // P1 damages enemies, P2 damages warriors
+    const targets = isP2 ? this.warriors : this.enemies;
+    targets.getChildren().forEach((u) => {
+      if (!u.active || u.dying) return;
+      u.hp -= 30;
+      this.showDamageNumber(u.x, u.y - u.unitHeight / 2, 30, '#ff4444');
+      if (u.hp <= 0) this.killUnit(u);
     });
   }
 
-  applyHealBase(ability) {
-    this.abilityCooldowns[ability.id] = ability.cooldown;
+  applyHealBase(ability, isP2 = false) {
+    const cooldowns = isP2 ? this.p2AbilityCooldowns : this.abilityCooldowns;
+    cooldowns[ability.id] = ability.cooldown;
     this.sfx.healEffect();
     this.cameras.main.flash(300, 100, 255, 100);
 
-    const healed = Math.min(100, this.maxPlayerBaseHP - this.playerBaseHP);
-    this.playerBaseHP = Math.min(this.maxPlayerBaseHP, this.playerBaseHP + 100);
-    this.playerHPText.setText(`HP: ${Math.ceil(this.playerBaseHP)}`);
-    if (healed > 0) {
-      this.showDamageNumber(this.playerBase.x, this.playerBase.y - 60, healed, '#44ff44');
+    if (isP2) {
+      const healed = Math.min(100, this.maxEnemyBaseHP - this.enemyBaseHP);
+      this.enemyBaseHP = Math.min(this.maxEnemyBaseHP, this.enemyBaseHP + 100);
+      this.enemyHPText.setText(`HP: ${Math.ceil(this.enemyBaseHP)}`);
+      if (healed > 0) {
+        this.showDamageNumber(this.enemyBase.x, this.enemyBase.y - 60, healed, '#44ff44');
+      }
+    } else {
+      const healed = Math.min(100, this.maxPlayerBaseHP - this.playerBaseHP);
+      this.playerBaseHP = Math.min(this.maxPlayerBaseHP, this.playerBaseHP + 100);
+      this.playerHPText.setText(`HP: ${Math.ceil(this.playerBaseHP)}`);
+      if (healed > 0) {
+        this.showDamageNumber(this.playerBase.x, this.playerBase.y - 60, healed, '#44ff44');
+      }
     }
   }
 
-  applyWarDrums(ability) {
-    this.purchasedPassives.add(ability.id);
-    this.speedMultiplier = 1.2;
+  applyWarDrums(ability, isP2 = false) {
+    const passives = isP2 ? this.p2PurchasedPassives : this.purchasedPassives;
+    passives.add(ability.id);
 
-    // Boost all existing warriors
-    this.warriors.getChildren().forEach((w) => {
-      if (!w.active || w.dying) return;
-      w.speed *= 1.2;
-    });
+    if (isP2) {
+      this.p2SpeedMultiplier = 1.2;
+      this.enemies.getChildren().forEach((e) => {
+        if (!e.active || e.dying) return;
+        e.speed *= 1.2;
+      });
+    } else {
+      this.speedMultiplier = 1.2;
+      this.warriors.getChildren().forEach((w) => {
+        if (!w.active || w.dying) return;
+        w.speed *= 1.2;
+      });
+    }
 
-    this.updateActiveBuffsDisplay();
+    this.updateActiveBuffsDisplay(isP2);
   }
 
-  applyGoldMine(ability) {
-    this.purchasedPassives.add(ability.id);
-    this.goldIncomeMultiplier = 2;
-    this.updateActiveBuffsDisplay();
+  applyGoldMine(ability, isP2 = false) {
+    const passives = isP2 ? this.p2PurchasedPassives : this.purchasedPassives;
+    passives.add(ability.id);
+    if (isP2) {
+      this.p2GoldIncomeMultiplier = 2;
+    } else {
+      this.goldIncomeMultiplier = 2;
+    }
+    this.updateActiveBuffsDisplay(isP2);
   }
 
-  updateActiveBuffsDisplay() {
-    if (this.activeBuffsText) this.activeBuffsText.destroy();
+  updateActiveBuffsDisplay(isP2 = false) {
+    const passives = isP2 ? this.p2PurchasedPassives : this.purchasedPassives;
+    const textKey = isP2 ? 'p2ActiveBuffsText' : 'activeBuffsText';
+
+    if (this[textKey]) this[textKey].destroy();
 
     const buffs = [];
-    if (this.purchasedPassives.has('warDrums')) buffs.push('War Drums');
-    if (this.purchasedPassives.has('goldMine')) buffs.push('Gold Mine');
+    if (passives.has('warDrums')) buffs.push('War Drums');
+    if (passives.has('goldMine')) buffs.push('Gold Mine');
 
     if (buffs.length > 0) {
-      this.activeBuffsText = this.add.text(16, 40, buffs.join(' | '), {
+      this[textKey] = this.add.text(16, 40, buffs.join(' | '), {
         fontSize: '12px', color: '#88ff88',
       }).setScrollFactor(0).setDepth(20);
+
+      // In 2P, only show on the correct camera
+      if (this.twoPlayer) {
+        if (isP2) {
+          this.cameras.main.ignore(this[textKey]);
+        } else {
+          this.p2Camera.ignore(this[textKey]);
+        }
+      }
     }
   }
 
   endGame(message) {
     this.gameOver = true;
-    if (this.shopOpen) this.closeShop();
+    if (this.shopOpen) this.closeShop('p1');
+    if (this.twoPlayer && this.p2ShopOpen) this.closeShop('p2');
     if (this.music) this.music.stop();
-    if (message === 'You Win!') this.sfx.victory();
+
+    const isWin = message === 'You Win!' || message === 'Player 1 Wins!';
+    if (isWin) this.sfx.victory();
     else this.sfx.defeat();
     // Stop all units and set to idle texture
     this.warriors.getChildren().forEach((w) => {
@@ -2125,48 +2523,64 @@ export class GameScene extends Phaser.Scene {
       e.setTexture(textureKey(e.unitTypeName, e.faction, 'idle'));
     });
 
-    // Save progress on win
-    if (message === 'You Win!') {
-      const progress = loadProgress();
-      const newUnlocked = Math.max(progress.unlockedAge, this.ageIndex + 1);
-      const newProgress = { ...progress, unlockedAge: Math.min(newUnlocked, AGES.length - 1), birdUnlocked: progress.birdUnlocked || false };
-
-      // Unlock Bird when beating the final age (Future)
-      if (this.ageIndex === AGES.length - 1 && !newProgress.birdUnlocked) {
-        newProgress.birdUnlocked = true;
-      }
-      saveProgress(newProgress);
-
-      this.add.text(512, 200, 'Age Complete!', {
-        fontSize: '48px', color: '#00ff00', fontStyle: 'bold',
+    if (this.twoPlayer) {
+      // 2P: show winner message on both viewports, no progress saving
+      const color = message === 'Player 1 Wins!' ? '#4488ff' : '#ff4444';
+      const cx = 256; // center of 512px viewport
+      const winText = this.add.text(cx, 200, message, {
+        fontSize: '36px', color, fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 4,
       }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
 
-      if (this.ageIndex + 1 < AGES.length) {
-        this.add.text(512, 250, `${AGES[this.ageIndex + 1].name} Unlocked!`, {
-          fontSize: '24px', color: '#ffd700', fontStyle: 'bold',
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
-      }
+      const continueText = this.add.text(cx, 260, 'Click to return to menu', {
+        fontSize: '16px', color: '#ffffff',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
 
-      // Bird unlock celebration
-      if (newProgress.birdUnlocked && !this.birdUnlocked) {
-        const birdY = this.ageIndex + 1 < AGES.length ? 290 : 250;
-        this.add.text(512, birdY, 'Bird Unit Unlocked!', {
-          fontSize: '28px', color: '#ffd700', fontStyle: 'bold',
+      this.input.once('pointerdown', () => this.scene.start('MenuScene'));
+    } else {
+      // Save progress on win
+      if (message === 'You Win!') {
+        const progress = loadProgress();
+        const newUnlocked = Math.max(progress.unlockedAge, this.ageIndex + 1);
+        const newProgress = { ...progress, unlockedAge: Math.min(newUnlocked, AGES.length - 1), birdUnlocked: progress.birdUnlocked || false };
+
+        // Unlock Bird when beating the final age (Future)
+        if (this.ageIndex === AGES.length - 1 && !newProgress.birdUnlocked) {
+          newProgress.birdUnlocked = true;
+        }
+        saveProgress(newProgress);
+
+        this.add.text(512, 200, 'Age Complete!', {
+          fontSize: '48px', color: '#00ff00', fontStyle: 'bold',
+          stroke: '#000000', strokeThickness: 4,
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+
+        if (this.ageIndex + 1 < AGES.length) {
+          this.add.text(512, 250, `${AGES[this.ageIndex + 1].name} Unlocked!`, {
+            fontSize: '24px', color: '#ffd700', fontStyle: 'bold',
+          }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+        }
+
+        // Bird unlock celebration
+        if (newProgress.birdUnlocked && !this.birdUnlocked) {
+          const birdY = this.ageIndex + 1 < AGES.length ? 290 : 250;
+          this.add.text(512, birdY, 'Bird Unit Unlocked!', {
+            fontSize: '28px', color: '#ffd700', fontStyle: 'bold',
+            stroke: '#000000', strokeThickness: 4,
+          }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+        }
+      } else {
+        this.add.text(512, 200, message, {
+          fontSize: '48px', color: '#ff0000', fontStyle: 'bold',
           stroke: '#000000', strokeThickness: 4,
         }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
       }
-    } else {
-      this.add.text(512, 200, message, {
-        fontSize: '48px', color: '#ff0000', fontStyle: 'bold',
-        stroke: '#000000', strokeThickness: 4,
+
+      this.add.text(512, 300, 'Click to continue', {
+        fontSize: '20px', color: '#ffffff',
       }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+
+      this.input.once('pointerdown', () => this.scene.start('LevelSelectScene'));
     }
-
-    this.add.text(512, 300, 'Click to continue', {
-      fontSize: '20px', color: '#ffffff',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
-
-    this.input.once('pointerdown', () => this.scene.start('LevelSelectScene'));
   }
 }
