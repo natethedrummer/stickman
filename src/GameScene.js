@@ -54,6 +54,13 @@ export class GameScene extends Phaser.Scene {
 
   create(data) {
     this.twoPlayer = !!(data && data.twoPlayer);
+    this.endlessMode = !!(data && data.endlessMode);
+    this.wave = 0;
+    this.totalKills = 0;
+    this.waveEnemiesSpawned = 0;
+    this.waveEnemiesTarget = 0;
+    this.waveClearPending = false;
+    this.waveSpawnTimer = null;
 
     const diffKey = (data && data.difficulty) || 'medium';
     this.difficulty = DIFFICULTIES[diffKey] || DIFFICULTIES.medium;
@@ -85,6 +92,11 @@ export class GameScene extends Phaser.Scene {
     // Base HP from age config (equal in 2P)
     this.maxPlayerBaseHP = BASE_HP;
     this.maxEnemyBaseHP = this.twoPlayer ? BASE_HP : this.ageConfig.enemyBaseHP;
+    if (this.endlessMode) this.maxEnemyBaseHP = BASE_HP;
+
+    // Wave stat multipliers (updated each wave in endless mode)
+    this.waveHpMult = this.difficulty.enemyHpMult;
+    this.waveDmgMult = this.difficulty.enemyDmgMult;
 
     this.cleanupTextures();
     this.generateStickmanTextures();
@@ -248,11 +260,15 @@ export class GameScene extends Phaser.Scene {
 
     // ── Enemy spawner (AI only in single player) ─────────────
     if (!this.twoPlayer) {
-      this.time.addEvent({
-        delay: this.difficulty.enemySpawnInterval,
-        loop: true,
-        callback: () => this.spawnEnemy(),
-      });
+      if (this.endlessMode) {
+        this.startWave();
+      } else {
+        this.time.addEvent({
+          delay: this.difficulty.enemySpawnInterval,
+          loop: true,
+          callback: () => this.spawnEnemy(),
+        });
+      }
     }
 
     // ── Camera & physics bounds ─────────────────────────────
@@ -533,6 +549,18 @@ export class GameScene extends Phaser.Scene {
       stroke: '#000000', strokeThickness: 2,
     }).setScrollFactor(0).setDepth(20);
     if (this.twoPlayer) this.p1HudElements.push(this.weatherText);
+
+    // ── Endless Mode HUD ──────────────────────────────────────
+    if (this.endlessMode) {
+      this.waveText = this.add.text(512, 16, 'Wave 1', {
+        fontSize: '20px', color: '#ffd700', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+      this.killsText = this.add.text(512, 40, 'Kills: 0', {
+        fontSize: '16px', color: '#ffffff',
+        stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+    }
 
     // ── 2P Camera ignore setup ───────────────────────────────
     if (this.twoPlayer) {
@@ -2061,11 +2089,17 @@ export class GameScene extends Phaser.Scene {
   spawnEnemy() {
     if (this.gameOver) return;
 
-    const affordable = this.unitTypes.filter((t) => t.cost <= this.enemyGold && t.name !== 'Bird');
-    if (affordable.length === 0) return;
+    let type;
+    if (this.endlessMode) {
+      const nonBird = this.unitTypes.filter((t) => t.name !== 'Bird');
+      type = Phaser.Utils.Array.GetRandom(nonBird);
+    } else {
+      const affordable = this.unitTypes.filter((t) => t.cost <= this.enemyGold && t.name !== 'Bird');
+      if (affordable.length === 0) return;
+      type = Phaser.Utils.Array.GetRandom(affordable);
+      this.enemyGold -= type.cost;
+    }
 
-    const type = Phaser.Utils.Array.GetRandom(affordable);
-    this.enemyGold -= type.cost;
     this.sfx.enemySpawn();
     const e = this.add.sprite(GAME_W - 100, GROUND_Y - type.height / 2, textureKey(type.name, 'enemy', 'idle')).setDepth(10);
     e.setFlipX(true);
@@ -2075,13 +2109,15 @@ export class GameScene extends Phaser.Scene {
     e.body.setCollideWorldBounds(true);
     this.enemies.add(e);
 
-    e.hp = type.hp * this.difficulty.enemyHpMult;
+    const hpMult = this.endlessMode ? this.waveHpMult : this.difficulty.enemyHpMult;
+    const dmgMult = this.endlessMode ? this.waveDmgMult : this.difficulty.enemyDmgMult;
+    e.hp = type.hp * hpMult;
     e.maxHp = e.hp;
     e.attacking = false;
     e.attackTarget = null;
     e.speed = type.speed * this.weather.speedMult;
     const eDmgMult = type.name === 'Archer' ? this.weather.archerDmgMult : this.weather.dmgMult;
-    e.damage = type.damage * this.difficulty.enemyDmgMult * eDmgMult;
+    e.damage = type.damage * dmgMult * eDmgMult;
     e.faction = 'enemy';
     e.unitCost = type.cost;
     e.unitWidth = type.width;
@@ -2295,7 +2331,13 @@ export class GameScene extends Phaser.Scene {
         this.accumulateDamage(this.enemyBase, dmg, time);
         this.enemyHPText.setText(`HP: ${Math.ceil(Math.max(0, this.enemyBaseHP))}`);
         if (time - this.lastBaseDamageTime > 300) { this.lastBaseDamageTime = time; this.sfx.baseDamage(); }
-        if (this.enemyBaseHP <= 0) this.endGame(this.twoPlayer ? 'Player 1 Wins!' : 'You Win!');
+        if (this.enemyBaseHP <= 0) {
+          if (this.endlessMode) {
+            this.completeWave();
+          } else {
+            this.endGame(this.twoPlayer ? 'Player 1 Wins!' : 'You Win!');
+          }
+        }
       } else {
         w.body.setVelocityX(w.speed);
       }
@@ -2485,6 +2527,10 @@ export class GameScene extends Phaser.Scene {
       this.gold += Math.floor(unit.unitCost / 5);
       this.sfx.coinChime();
       this.updateGoldText();
+      if (this.endlessMode) {
+        this.totalKills++;
+        if (this.killsText) this.killsText.setText(`Kills: ${this.totalKills}`);
+      }
     } else if (unit.faction === 'player' && this.twoPlayer) {
       this.p2Gold += Math.floor(unit.unitCost / 5);
       this.sfx.coinChime();
@@ -3010,6 +3056,22 @@ export class GameScene extends Phaser.Scene {
       }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
 
       this.input.once('pointerdown', () => this.scene.start('MenuScene'));
+    } else if (this.endlessMode) {
+      this.add.text(512, 200, 'Game Over', {
+        fontSize: '48px', color: '#ff0000', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 4,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+
+      this.add.text(512, 260, `Waves: ${this.wave}  |  Kills: ${this.totalKills}`, {
+        fontSize: '24px', color: '#ffd700', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+
+      this.add.text(512, 310, 'Click to return to menu', {
+        fontSize: '20px', color: '#ffffff',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20);
+
+      this.input.once('pointerdown', () => this.scene.start('MenuScene'));
     } else {
       // Save progress on win
       if (message === 'You Win!') {
@@ -3055,5 +3117,76 @@ export class GameScene extends Phaser.Scene {
 
       this.input.once('pointerdown', () => this.scene.start('LevelSelectScene'));
     }
+  }
+
+  // ── Endless Mode ──────────────────────────────────────────
+
+  startWave() {
+    this.waveEnemiesSpawned = 0;
+    this.waveEnemiesTarget = 6 + this.wave * 2;
+    this.waveClearPending = false;
+
+    // Scale enemy base HP
+    this.maxEnemyBaseHP = Math.round(BASE_HP * (1 + this.wave * 0.3));
+    this.enemyBaseHP = this.maxEnemyBaseHP;
+    this.enemyBaseStage = 0;
+    this.enemyBase.setTexture('base_enemy_0');
+    this.enemyHPText.setText(`HP: ${this.maxEnemyBaseHP}`);
+
+    // Scale wave stat multipliers
+    this.waveHpMult = this.difficulty.enemyHpMult * (1 + this.wave * 0.15);
+    this.waveDmgMult = this.difficulty.enemyDmgMult * (1 + this.wave * 0.1);
+
+    // Show wave banner
+    const banner = this.add.text(512, 200, `Wave ${this.wave + 1}`, {
+      fontSize: '48px', color: '#ffd700', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(25);
+    this.time.delayedCall(2000, () => { if (banner.active) banner.destroy(); });
+
+    // Update wave HUD
+    if (this.waveText) this.waveText.setText(`Wave ${this.wave + 1}`);
+
+    // Schedule wave enemy spawns (faster each wave, min 1000ms)
+    const interval = Math.max(1000, this.difficulty.enemySpawnInterval - this.wave * 200);
+    this.waveSpawnTimer = this.time.addEvent({
+      delay: interval,
+      loop: true,
+      callback: this.spawnWaveEnemy,
+      callbackScope: this,
+    });
+  }
+
+  spawnWaveEnemy() {
+    if (this.gameOver || this.waveClearPending) return;
+    if (this.waveEnemiesSpawned >= this.waveEnemiesTarget) {
+      this.waveSpawnTimer.remove();
+      return;
+    }
+    this.spawnEnemy();
+    this.waveEnemiesSpawned++;
+  }
+
+  completeWave() {
+    if (this.waveClearPending) return;
+    this.waveClearPending = true;
+    if (this.waveSpawnTimer) this.waveSpawnTimer.remove();
+
+    // Clear remaining enemies
+    this.enemies.getChildren().slice().forEach((e) => this.killUnit(e));
+
+    // Show wave complete banner
+    const msg = this.add.text(512, 220, `Wave ${this.wave + 1} Complete!`, {
+      fontSize: '40px', color: '#44ff44', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(25);
+
+    this.wave++;
+    if (this.waveText) this.waveText.setText(`Wave ${this.wave + 1}`);
+
+    this.time.delayedCall(3000, () => {
+      if (msg.active) msg.destroy();
+      if (!this.gameOver) this.startWave();
+    });
   }
 }

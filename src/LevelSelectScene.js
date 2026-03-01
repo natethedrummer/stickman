@@ -144,24 +144,90 @@ export class LevelSelectScene extends Phaser.Scene {
     this.difficultyY = 400;
 
     // Back to Menu button
-    const backBtn = this.add.rectangle(cx - 110, 520, 180, 44, 0x336699, 0.9)
+    const backBtn = this.add.rectangle(cx - 220, 520, 180, 44, 0x336699, 0.9)
       .setInteractive({ useHandCursor: true });
-    this.add.text(cx - 110, 520, 'Back to Menu', {
+    this.add.text(cx - 220, 520, 'Back to Menu', {
       fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
     }).setOrigin(0.5);
     backBtn.on('pointerover', () => backBtn.setAlpha(1));
     backBtn.on('pointerout', () => backBtn.setAlpha(0.9));
     backBtn.on('pointerdown', () => this.scene.start('MenuScene'));
 
-    // Music button
-    const musicBtn = this.add.rectangle(cx + 110, 520, 180, 44, 0x664499, 0.9)
+    // Endless Mode button
+    const endlessBtn = this.add.rectangle(cx, 520, 180, 44, 0x884400, 0.9)
       .setInteractive({ useHandCursor: true });
-    this.add.text(cx + 110, 520, 'Music', {
+    this.add.text(cx, 520, '∞ Endless Mode', {
+      fontSize: '16px', color: '#ffd700', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    endlessBtn.on('pointerover', () => endlessBtn.setAlpha(1));
+    endlessBtn.on('pointerout', () => endlessBtn.setAlpha(0.9));
+    endlessBtn.on('pointerdown', () => this.showEndlessDifficultyButtons());
+
+    // Music button
+    const musicBtn = this.add.rectangle(cx + 220, 520, 180, 44, 0x664499, 0.9)
+      .setInteractive({ useHandCursor: true });
+    this.add.text(cx + 220, 520, 'Music', {
       fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
     }).setOrigin(0.5);
     musicBtn.on('pointerover', () => musicBtn.setAlpha(1));
     musicBtn.on('pointerout', () => musicBtn.setAlpha(0.9));
     musicBtn.on('pointerdown', () => this.openMusicShop());
+  }
+
+  showEndlessDifficultyButtons() {
+    this.difficultyElements.forEach((el) => el.destroy());
+    this.difficultyElements = [];
+
+    const cx = 512;
+    const y = this.difficultyY;
+
+    const header = this.add.text(cx, y, 'Choose Difficulty for Endless Mode', {
+      fontSize: '16px', color: '#ffd700', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5);
+    this.difficultyElements.push(header);
+
+    const keys = Object.keys(DIFFICULTIES);
+    const btnW = 170;
+    const btnH = 40;
+    const gap = 14;
+    const totalW = keys.length * btnW + (keys.length - 1) * gap;
+    const startX = cx - totalW / 2;
+    const btnY = y + 38;
+
+    const descriptions = [
+      'More gold, weaker enemies',
+      'Balanced experience',
+      'Less gold, tougher enemies',
+      'Brutal challenge!',
+    ];
+
+    keys.forEach((key, i) => {
+      const diff = DIFFICULTIES[key];
+      const x = startX + i * (btnW + gap) + btnW / 2;
+
+      const btn = this.add.rectangle(x, btnY, btnW, btnH, diff.color, 0.85)
+        .setInteractive({ useHandCursor: true });
+      this.difficultyElements.push(btn);
+
+      const label = this.add.text(x, btnY, diff.label, {
+        fontSize: '18px', color: '#ffffff', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0.5);
+      this.difficultyElements.push(label);
+
+      const desc = this.add.text(x, btnY + 28, descriptions[i], {
+        fontSize: '11px', color: '#aaaaaa',
+      }).setOrigin(0.5);
+      this.difficultyElements.push(desc);
+
+      btn.on('pointerover', () => btn.setAlpha(1));
+      btn.on('pointerout', () => btn.setAlpha(0.85));
+      btn.on('pointerdown', () => {
+        this.stopPreview();
+        this.scene.start('GameScene', { endlessMode: true, difficulty: key, ageIndex: 0 });
+      });
+    });
   }
 
   showDifficultyButtons(ageIndex) {
