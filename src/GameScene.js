@@ -8,9 +8,9 @@ const GROUND_Y = 500;
 const GAME_W = 3072;
 
 const UNIT_TYPES = [
-  { name: 'Archer',   cost: 25,  hp: 25,  damage: 15, speed: 50, width: 16, height: 32, color: 0x33cc33, blockReduction: 0,   blockDuration: 0,   blockCooldown: 0 },
+  { name: 'Archer',   cost: 25,  hp: 25,  damage: 15, speed: 50, width: 16, height: 32, color: 0x33cc33, blockReduction: 0,   blockDuration: 0,   blockCooldown: 0,  rangeAttackRange: 220, rangeAttackDamage: 8,  rangeAttackCooldown: 3.5 },
   { name: 'Warrior',  cost: 50,  hp: 50,  damage: 10, speed: 50, width: 24, height: 40, color: 0x3399ff, blockReduction: 0.5, blockDuration: 1.5, blockCooldown: 3 },
-  { name: 'Spearman', cost: 75,  hp: 65,  damage: 12, speed: 60, width: 20, height: 44, color: 0xff8800, blockReduction: 0,   blockDuration: 0,   blockCooldown: 0 },
+  { name: 'Spearman', cost: 75,  hp: 65,  damage: 12, speed: 60, width: 20, height: 44, color: 0xff8800, blockReduction: 0,   blockDuration: 0,   blockCooldown: 0,  rangeAttackRange: 180, rangeAttackDamage: 15, rangeAttackCooldown: 5 },
   { name: 'Giant',    cost: 150, hp: 150, damage: 20, speed: 30, width: 36, height: 52, color: 0x9933ff, blockReduction: 0.6, blockDuration: 2,   blockCooldown: 4 },
   { name: 'Bird',     cost: 200, hp: 80,  damage: 25, speed: 90, width: 28, height: 28, color: 0xccaa44, blockReduction: 0,   blockDuration: 0,   blockCooldown: 0 },
 ];
@@ -249,6 +249,7 @@ export class GameScene extends Phaser.Scene {
     // ── Groups ──────────────────────────────────────────────
     this.warriors = this.physics.add.group();
     this.enemies = this.physics.add.group();
+    this.projectiles = this.physics.add.group();
 
     // ── Collisions ──────────────────────────────────────────
     // Units land on ground
@@ -257,6 +258,10 @@ export class GameScene extends Phaser.Scene {
 
     // Warriors vs enemies — they stop and fight
     this.physics.add.overlap(this.warriors, this.enemies, this.unitFight, null, this);
+
+    // Projectiles hit enemies / player units
+    this.physics.add.overlap(this.projectiles, this.enemies, this.onProjectileHit, null, this);
+    this.physics.add.overlap(this.projectiles, this.warriors, this.onProjectileHit, null, this);
 
     // ── Enemy spawner (AI only in single player) ─────────────
     if (!this.twoPlayer) {
@@ -643,6 +648,22 @@ export class GameScene extends Phaser.Scene {
     shieldG.strokeRect(1, 0, 8, 10);
     shieldG.generateTexture('shield_icon', 10, 10);
     shieldG.destroy();
+
+    // Arrow projectile texture (12×3 px)
+    const arrowG = this.add.graphics();
+    arrowG.fillStyle(0xaa8833, 1);
+    arrowG.fillRect(0, 1, 9, 1);
+    arrowG.fillTriangle(9, 0, 9, 2, 12, 1);
+    arrowG.generateTexture('arrow', 12, 3);
+    arrowG.destroy();
+
+    // Spear projectile texture (20×5 px)
+    const spearG = this.add.graphics();
+    spearG.fillStyle(0xff8800, 1);
+    spearG.fillRect(0, 2, 14, 1);
+    spearG.fillTriangle(14, 0, 14, 4, 20, 2);
+    spearG.generateTexture('spear_proj', 20, 5);
+    spearG.destroy();
 
     this.createAnimations();
   }
@@ -2082,6 +2103,12 @@ export class GameScene extends Phaser.Scene {
     w.blockTimer = 0;
     w.blockCooldownTimer = type.blockReduction > 0 ? type.blockCooldown : 0;
 
+    // Ranged attack state
+    w.rangeAttackRange = type.rangeAttackRange || 0;
+    w.rangeAttackDamage = type.rangeAttackDamage || 0;
+    w.rangeAttackCooldown = type.rangeAttackCooldown || 0;
+    w.rangeAttackTimer = 0;
+
     // HP bar
     w.hpBar = this.add.rectangle(w.x, w.y - type.height / 2 - 6, type.width, 4, 0x00ff00).setDepth(11);
   }
@@ -2134,6 +2161,12 @@ export class GameScene extends Phaser.Scene {
     e.blockTimer = 0;
     e.blockCooldownTimer = type.blockReduction > 0 ? type.blockCooldown : 0;
 
+    // Ranged attack state
+    e.rangeAttackRange = type.rangeAttackRange || 0;
+    e.rangeAttackDamage = type.rangeAttackDamage || 0;
+    e.rangeAttackCooldown = type.rangeAttackCooldown || 0;
+    e.rangeAttackTimer = 0;
+
     e.hpBar = this.add.rectangle(e.x, e.y - type.height / 2 - 6, type.width, 4, 0xff0000).setDepth(11);
   }
 
@@ -2175,6 +2208,12 @@ export class GameScene extends Phaser.Scene {
     e.blocking = false;
     e.blockTimer = 0;
     e.blockCooldownTimer = type.blockReduction > 0 ? type.blockCooldown : 0;
+
+    // Ranged attack state
+    e.rangeAttackRange = type.rangeAttackRange || 0;
+    e.rangeAttackDamage = type.rangeAttackDamage || 0;
+    e.rangeAttackCooldown = type.rangeAttackCooldown || 0;
+    e.rangeAttackTimer = 0;
 
     e.hpBar = this.add.rectangle(e.x, e.y - type.height / 2 - 6, type.width, 4, 0xff0000).setDepth(11);
   }
@@ -2298,6 +2337,22 @@ export class GameScene extends Phaser.Scene {
         w.attackTarget = null;
       }
 
+      // Ranged attack — fire while advancing, before melee
+      if (w.rangeAttackRange > 0 && !w.attacking && !this.isAtEnemyBase(w)) {
+        w.rangeAttackTimer -= dt;
+        let nearestEnemy = null;
+        let nearestDist = w.rangeAttackRange;
+        this.enemies.getChildren().forEach((e) => {
+          if (e.dying || !e.active) return;
+          const dist = e.x - w.x;
+          if (dist > 0 && dist < nearestDist) { nearestDist = dist; nearestEnemy = e; }
+        });
+        if (nearestEnemy && w.rangeAttackTimer <= 0) {
+          this.fireProjectile(w, nearestEnemy);
+          w.rangeAttackTimer = w.rangeAttackCooldown;
+        }
+      }
+
       let newAnimState = 'walk';
       if (w.attacking && w.attackTarget) {
         // Attack another unit
@@ -2364,6 +2419,22 @@ export class GameScene extends Phaser.Scene {
       if (e.attackTarget && !e.attackTarget.active) {
         e.attacking = false;
         e.attackTarget = null;
+      }
+
+      // Ranged attack — fire while advancing, before melee
+      if (e.rangeAttackRange > 0 && !e.attacking && !this.isAtPlayerBase(e)) {
+        e.rangeAttackTimer -= dt;
+        let nearestWarrior = null;
+        let nearestDist = e.rangeAttackRange;
+        this.warriors.getChildren().forEach((w) => {
+          if (w.dying || !w.active) return;
+          const dist = e.x - w.x;
+          if (dist > 0 && dist < nearestDist) { nearestDist = dist; nearestWarrior = w; }
+        });
+        if (nearestWarrior && e.rangeAttackTimer <= 0) {
+          this.fireProjectile(e, nearestWarrior);
+          e.rangeAttackTimer = e.rangeAttackCooldown;
+        }
       }
 
       let newAnimState = 'walk';
@@ -2513,6 +2584,40 @@ export class GameScene extends Phaser.Scene {
 
   isAtPlayerBase(unit) {
     return unit.x <= this.playerBase.x + 60;
+  }
+
+  fireProjectile(shooter, target) {
+    const isArcher = shooter.unitTypeName === 'Archer';
+    const projTexture = isArcher ? 'arrow' : 'spear_proj';
+    const speed = isArcher ? 400 : 320;
+
+    const proj = this.add.sprite(shooter.x, shooter.y, projTexture).setDepth(9);
+    this.physics.add.existing(proj);
+    proj.body.setAllowGravity(false);
+    proj.body.setVelocityX(shooter.faction === 'player' ? speed : -speed);
+    if (shooter.faction === 'enemy') proj.setFlipX(true);
+
+    proj.shooterFaction = shooter.faction;
+    proj.projDamage = shooter.rangeAttackDamage;
+    proj.unitType = shooter.unitTypeName;
+    this.projectiles.add(proj);
+
+    if (isArcher) this.sfx.arrowShoot();
+    else this.sfx.spearThrow();
+
+    this.time.delayedCall(2000, () => { if (proj.active) proj.destroy(); });
+  }
+
+  onProjectileHit(proj, unit) {
+    if (!proj.active || !unit.active || unit.dying) return;
+    if (proj.shooterFaction === unit.faction) return;
+
+    unit.hp -= proj.projDamage;
+    this.showDamageNumber(unit.x, unit.y - unit.unitHeight / 2 - 10, proj.projDamage, '#ffff88');
+    this.accumulateDamage(unit, proj.projDamage, this.time.now);
+    proj.destroy();
+
+    if (unit.hp <= 0) this.killUnit(unit);
   }
 
   killUnit(unit) {

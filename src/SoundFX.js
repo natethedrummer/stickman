@@ -136,4 +136,15 @@ export class SoundFX {
     this.tone(800, 1200, 0.06, 'square', 0.1);
     this.tone(1200, 600, 0.08, 'triangle', 0.08);
   }
+
+  arrowShoot() {
+    if (this.isMuted()) return;
+    this.tone(1800, 800, 0.08, 'sawtooth', 0.07);
+  }
+
+  spearThrow() {
+    if (this.isMuted()) return;
+    this.tone(600, 200, 0.12, 'triangle', 0.1);
+    this.noise(0.06, 0.05);
+  }
 }
