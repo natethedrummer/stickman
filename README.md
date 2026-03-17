@@ -7,6 +7,11 @@ A side-scrolling base defense strategy game built with Phaser 3 and Vite.
 This game is inspired by [this video](https://www.youtube.com/watch?v=fi3Txc0_2eQ) and the classic "Age of War" genre of games — where two bases sit on opposite ends of an arena and each side spawns units that march toward the enemy, fighting anything in their path. The goal is to destroy the enemy base before they destroy yours.
 
 We're not trying to make an exact copy of any existing game. Instead, we're building something that captures the same fun — the tug-of-war tension of spawning the right units at the right time — while putting our own spin on it.
+## Play
+
+**Play online:** [https://natethedrummer.github.io/stickman](https://natethedrummer.github.io/stickman/)
+
+Or open index.html in any modern browser (Chrome, Firefox, Safari, Edge).
 
 ## How to play
 
@@ -39,7 +44,7 @@ npm run dev
 
 ## Future home
 
-The goal is to eventually host this game on [www.luppes.com](http://www.luppes.com), a website maintained by Teddy's grandpa. It's already home to all kinds of cool stuff — including how to do corn — and this game will fit right in.
+The goal is to eventually host this game on luppes.com, a website maintained by Teddy's grandpa. It's already home to all kinds of cool stuff — including how to do corn — and this game will fit right in.
 
 ## Authors
 
